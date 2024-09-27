@@ -191,7 +191,7 @@ const FAQ = () => {
   );
 };
 
-// Footer Component
+// Footer Component with Smaller and Responsive Font
 const Footer = () => {
   console.log("Footer component rendered");
   return (
@@ -199,38 +199,39 @@ const Footer = () => {
       <div className="container mx-auto px-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
-            <h3 className="text-md font-semibold mb-2">HomeWorth</h3>
-            <p>AI-powered real estate valuations in Ireland.</p>
+            <h3 className="text-sm md:text-md font-semibold mb-2">HomeWorth</h3>
+            <p className="text-xs md:text-sm">AI-powered home valuations.</p>
           </div>
           <div>
-            <h4 className="text-md font-semibold mb-2">Quick Links</h4>
+            <h4 className="text-sm md:text-md font-semibold mb-2">Quick Links</h4>
             <ul>
-              <li><a href="#" className="hover:text-blue-600">Home</a></li>
-              <li><a href="#" className="hover:text-blue-600">About Us</a></li>
+              <li><a href="#" className="text-xs md:text-sm hover:text-blue-600">Home</a></li>
+              <li><a href="#" className="text-xs md:text-sm hover:text-blue-600">About Us</a></li>
             </ul>
           </div>
           <div>
-            <h4 className="text-md font-semibold mb-2">Legal</h4>
+            <h4 className="text-sm md:text-md font-semibold mb-2">Legal</h4>
             <ul>
-              <li><a href="#" className="hover:text-blue-600">Privacy Policy</a></li>
-              <li><a href="#" className="hover:text-blue-600">Terms of Service</a></li>
+              <li><a href="#" className="text-xs md:text-sm hover:text-blue-600">Privacy Policy</a></li>
+              <li><a href="#" className="text-xs md:text-sm hover:text-blue-600">Terms of Service</a></li>
             </ul>
           </div>
           <div>
-            <h4 className="text-md font-semibold mb-2">Follow Us</h4>
+            <h4 className="text-sm md:text-md font-semibold mb-2">Follow Us</h4>
             <ul>
-              <li><a href="#" className="hover:text-blue-600">Facebook</a></li>
-              <li><a href="#" className="hover:text-blue-600">LinkedIn</a></li>
+              <li><a href="#" className="text-xs md:text-sm hover:text-blue-600">Facebook</a></li>
+              <li><a href="#" className="text-xs md:text-sm hover:text-blue-600">LinkedIn</a></li>
             </ul>
           </div>
         </div>
-        <div className="mt-6 text-center">
+        <div className="mt-6 text-center text-xs md:text-sm">
           <p>&copy; 2024 RealEstateGen. All rights reserved.</p>
         </div>
       </div>
     </footer>
   );
 };
+
 
 // Main App Component
 export default function RealEstateApp() {
