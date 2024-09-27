@@ -1,4 +1,4 @@
-# RealEstateGen MVP - README
+# HomePrice MVP - README
 
 ## Overview
 **RealEstateGen** is an AI-powered platform aimed at simplifying property valuations in Ireland, enabling homeowners to quickly assess their property value and connect with realtors. The MVP (Minimum Viable Product) focuses on a **Property Valuation Tool** designed to generate leads for realtors and provide users with accurate property estimates based on real-time market data.

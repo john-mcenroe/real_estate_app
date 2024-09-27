@@ -1,35 +1,91 @@
 'use client';
 
-import React, { Suspense, useState } from 'react';
+import React, { Suspense, useState, useEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
+import { useRouter } from 'next/navigation'; // Next.js routing
 
 // Header Component
-const Header = () => (
-  <header className="bg-white shadow-sm">
-    <nav className="container mx-auto px-4 py-3">
-      <div className="flex justify-between items-center">
-        <div className="text-xl font-bold text-blue-700">RealEstateGen</div>
-        <div className="hidden md:flex space-x-4">
-          <a href="#" className="text-gray-600 hover:text-blue-700">Home</a>
-          <a href="#" className="text-gray-600 hover:text-blue-700">About</a>
+const Header = () => {
+  console.log("Header component rendered");
+  return (
+    <header className="bg-white shadow-sm">
+      <nav className="container mx-auto px-4 py-3">
+        <div className="flex justify-between items-center">
+          <div className="text-xl font-bold text-blue-700">RealEstateGen</div>
+          <div className="hidden md:flex space-x-4">
+            <a href="#" className="text-gray-600 hover:text-blue-700">Home</a>
+            <a href="#" className="text-gray-600 hover:text-blue-700">About</a>
+          </div>
         </div>
-      </div>
-    </nav>
-  </header>
-);
+      </nav>
+    </header>
+  );
+};
 
-
-// PropertyValuationHero Component with Narrower Search Bar
+// PropertyValuationHero Component
 const PropertyValuationHero = () => {
   const [address, setAddress] = useState('');
+  const router = useRouter();
 
-  const handleSubmit = (e) => {
+  useEffect(() => {
+    console.log("PropertyValuationHero component rendered");
+  }, []);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
+  
+    console.log('Form submission triggered');
+  
     if (address.trim() === '') {
+      console.warn('No address entered. Showing alert.');
       alert('Please enter an Irish address.');
-    } else {
-      alert(`Valuation requested for: ${address}`);
+      return;
     }
+  
+    try {
+      console.log('Submitting address:', address);
+  
+      const response = await fetch('/api/geocode', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ address }),
+      });
+  
+      const data = await response.json();
+      console.log('API Response:', data);
+  
+      if (response.ok && data.lat && data.lng) {
+        console.log('Routing to the results page');
+  
+        // Use URLSearchParams to construct the query string
+        const params = new URLSearchParams({
+          lat: data.lat.toString(),
+          lng: data.lng.toString(),
+          address: data.address,
+        });
+  
+        // Manually construct the URL with the query parameters
+        const resultURL = `/result?${params.toString()}`;
+  
+        console.log('Final URL for redirection:', resultURL);
+  
+        // Route using the constructed URL
+        router.push(resultURL);
+      } else {
+        console.error('API response was not OK or missing lat/lng:', data.message);
+        alert(`Error: ${data.message}`);
+      }
+    } catch (error) {
+      console.error('Error fetching geolocation data:', error.message);
+      alert('Error fetching geolocation data.');
+    }
+  };
+  
+
+  const handleButtonClick = () => {
+    console.log('Submit button clicked');
   };
 
   return (
@@ -40,10 +96,9 @@ const PropertyValuationHero = () => {
       }}
     >
       <div className="absolute inset-0 bg-black opacity-50"></div>
-
       <div className="container mx-auto px-4 relative z-10 text-center">
         <h1 className="text-3xl font-bold mb-2 text-white">How Much Is My Home Worth?</h1>
-        <p className="text-md mb-6 text-gray-200">
+        <p className="text-m mb-6 text-gray-200">
           Enter your address to get an instant estimate and claim your property.
         </p>
         <form onSubmit={handleSubmit} className="flex justify-center flex-col md:flex-row items-center">
@@ -52,10 +107,14 @@ const PropertyValuationHero = () => {
             placeholder="Enter your address"
             className="w-full md:w-1/3 px-3 py-2 rounded-lg focus:outline-none text-gray-900 mb-4 md:mb-0 md:mr-2"
             value={address}
-            onChange={(e) => setAddress(e.target.value)}
+            onChange={(e) => {
+              setAddress(e.target.value);
+              console.log('Address input updated:', e.target.value);
+            }}
           />
           <button
             type="submit"
+            onClick={handleButtonClick} // Extra logging to ensure button click is captured
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold transition duration-300"
           >
             Get Started
@@ -133,45 +192,49 @@ const FAQ = () => {
 };
 
 // Footer Component
-const Footer = () => (
-  <footer className="bg-gray-100 text-gray-600 py-6">
-    <div className="container mx-auto px-4">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div>
-          <h3 className="text-md font-semibold mb-2">RealEstateGen</h3>
-          <p>AI-powered real estate valuations in Ireland.</p>
+const Footer = () => {
+  console.log("Footer component rendered");
+  return (
+    <footer className="bg-gray-100 text-gray-600 py-6">
+      <div className="container mx-auto px-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div>
+            <h3 className="text-md font-semibold mb-2">HomeWorth</h3>
+            <p>AI-powered real estate valuations in Ireland.</p>
+          </div>
+          <div>
+            <h4 className="text-md font-semibold mb-2">Quick Links</h4>
+            <ul>
+              <li><a href="#" className="hover:text-blue-600">Home</a></li>
+              <li><a href="#" className="hover:text-blue-600">About Us</a></li>
+            </ul>
+          </div>
+          <div>
+            <h4 className="text-md font-semibold mb-2">Legal</h4>
+            <ul>
+              <li><a href="#" className="hover:text-blue-600">Privacy Policy</a></li>
+              <li><a href="#" className="hover:text-blue-600">Terms of Service</a></li>
+            </ul>
+          </div>
+          <div>
+            <h4 className="text-md font-semibold mb-2">Follow Us</h4>
+            <ul>
+              <li><a href="#" className="hover:text-blue-600">Facebook</a></li>
+              <li><a href="#" className="hover:text-blue-600">LinkedIn</a></li>
+            </ul>
+          </div>
         </div>
-        <div>
-          <h4 className="text-md font-semibold mb-2">Quick Links</h4>
-          <ul>
-            <li><a href="#" className="hover:text-blue-600">Home</a></li>
-            <li><a href="#" className="hover:text-blue-600">About Us</a></li>
-          </ul>
-        </div>
-        <div>
-          <h4 className="text-md font-semibold mb-2">Legal</h4>
-          <ul>
-            <li><a href="#" className="hover:text-blue-600">Privacy Policy</a></li>
-            <li><a href="#" className="hover:text-blue-600">Terms of Service</a></li>
-          </ul>
-        </div>
-        <div>
-          <h4 className="text-md font-semibold mb-2">Follow Us</h4>
-          <ul>
-            <li><a href="#" className="hover:text-blue-600">Facebook</a></li>
-            <li><a href="#" className="hover:text-blue-600">LinkedIn</a></li>
-          </ul>
+        <div className="mt-6 text-center">
+          <p>&copy; 2024 RealEstateGen. All rights reserved.</p>
         </div>
       </div>
-      <div className="mt-6 text-center">
-        <p>&copy; 2024 RealEstateGen. All rights reserved.</p>
-      </div>
-    </div>
-  </footer>
-);
+    </footer>
+  );
+};
 
 // Main App Component
 export default function RealEstateApp() {
+  console.log("RealEstateApp component rendered");
   return (
     <div className="bg-white min-h-screen">
       <Suspense fallback={<div>Loading...</div>}>
