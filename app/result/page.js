@@ -63,7 +63,7 @@ export default function ResultPage() {
       try {
         const { data, error } = await supabase
           .from('scraped_property_data_v1')  // Table name
-          .select('*, latitude, longitude, sale_date, myhome_link, asking_price, asking_date');  // Fetch additional columns
+          .select('*, latitude, longitude, sale_date, sale_price, myhome_link, asking_price');  // Removed 'asking_date'
 
         if (error) {
           console.error('Error fetching data:', error.message);
@@ -148,7 +148,7 @@ export default function ResultPage() {
 
       {/* Similar Properties */}
       <div className="mt-8">
-        <h2 className="text-xl font-semibold mb-4">Similar Properties</h2>
+        <h2 className="text-xl font-semibold mb-4">Recently Sold Nearby</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {loading ? (
             <p>Loading properties...</p>
@@ -193,9 +193,7 @@ export default function ResultPage() {
                       <p className="text-sm">
                         <strong>Price Asked:</strong> {property.asking_price ? `€${parseFloat(property.asking_price).toLocaleString('en-IE')}` : 'N/A'}
                       </p>
-                      <p className="text-sm">
-                        <strong>Date Asked:</strong> {property.asking_date ? new Date(property.asking_date).toLocaleDateString() : 'N/A'}
-                      </p>
+                      {/* Removed Date Asked as 'asking_date' doesn't exist */}
                     </div>
                   </div>
 

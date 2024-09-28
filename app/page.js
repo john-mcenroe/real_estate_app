@@ -78,7 +78,7 @@ const PropertyValuationHero = () => {
       <div className="container mx-auto px-4 relative z-10 text-center">
         <h1 className="text-3xl font-bold mb-2 text-white">How Much Is My Home Worth?</h1>
         <p className="text-m mb-6 text-gray-200">
-          Enter your address to get an instant estimate and claim your property.
+          Enter your address to get an instant estimate.
         </p>
         <form onSubmit={handleSubmit} className="flex justify-center flex-col md:flex-row items-center">
           <input
