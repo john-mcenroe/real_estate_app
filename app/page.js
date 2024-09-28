@@ -12,7 +12,7 @@ const Header = () => {
     <header className="bg-white shadow-sm">
       <nav className="container mx-auto px-4 py-3">
         <div className="flex justify-between items-center">
-          <div className="text-xl font-bold text-blue-700">RealEstateGen</div>
+          <div className="text-l font-bold text-blue-700">PriceMyPlace.ie</div>
           <div className="hidden md:flex space-x-4">
             <a href="#" className="text-gray-600 hover:text-blue-700">Home</a>
             <a href="#" className="text-gray-600 hover:text-blue-700">About</a>
@@ -92,7 +92,7 @@ const PropertyValuationHero = () => {
             type="submit"
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold transition duration-300"
           >
-            Get Started
+            Get Valuation
           </button>
         </form>
       </div>
@@ -126,7 +126,7 @@ const FAQ = () => {
     },
     {
       question: "Why specialize in the Irish market?",
-      answer: "RealEstateGen leverages data specifically from the Irish property market, ensuring that all estimates are based on the most relevant local trends, regulations, and sales data. This makes our valuations more accurate for Irish homeowners compared to global tools."
+      answer: "We leverage data specifically from the Irish property market, ensuring that all estimates are based on the most relevant local trends, regulations, and sales data. This makes our valuations more accurate for Irish homeowners compared to global tools."
     },
   ];
 
@@ -211,7 +211,7 @@ const Footer = () => {
 // Main App Component
 export default function RealEstateApp() {
   useEffect(() => {
-    console.log("RealEstateApp component rendered");
+    console.log("App component rendered");
 
     // Test connection to Supabase and fetch rows from the table
     const testSupabaseConnection = async () => {

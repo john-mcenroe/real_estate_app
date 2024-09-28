@@ -129,7 +129,7 @@ export default function ResultPage() {
 
         {/* Value Estimate */}
         <div className="bg-gray-100 p-6 rounded-lg shadow-md">
-          <h2 className="text-lg font-semibold mb-4">Value Estimate</h2>
+          <h2 className="text-lg font-semibold mb-4">Price Estimate</h2>
           {medianPrice !== null ? (
             <>
               <p className="text-2xl font-bold text-green-500">€{medianPrice.toLocaleString()}</p>
