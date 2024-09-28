@@ -1,6 +1,7 @@
 'use client';
 
 import React, { Suspense, useState, useEffect } from 'react';
+import { supabase } from '../libs/supabaseClient'; // Import your Supabase client
 import { ChevronDown } from 'lucide-react';
 import { useRouter } from 'next/navigation'; // Next.js routing
 
@@ -27,24 +28,16 @@ const PropertyValuationHero = () => {
   const [address, setAddress] = useState('');
   const router = useRouter();
 
-  useEffect(() => {
-    console.log("PropertyValuationHero component rendered");
-  }, []);
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-  
-    console.log('Form submission triggered');
-  
+
     if (address.trim() === '') {
-      console.warn('No address entered. Showing alert.');
       alert('Please enter an Irish address.');
       return;
     }
-  
+
     try {
-      console.log('Submitting address:', address);
-  
+      // Fetch geolocation data
       const response = await fetch('/api/geocode', {
         method: 'POST',
         headers: {
@@ -52,40 +45,26 @@ const PropertyValuationHero = () => {
         },
         body: JSON.stringify({ address }),
       });
-  
+
       const data = await response.json();
-      console.log('API Response:', data);
-  
+
       if (response.ok && data.lat && data.lng) {
-        console.log('Routing to the results page');
-  
         // Use URLSearchParams to construct the query string
         const params = new URLSearchParams({
           lat: data.lat.toString(),
           lng: data.lng.toString(),
           address: data.address,
         });
-  
-        // Manually construct the URL with the query parameters
-        const resultURL = `/result?${params.toString()}`;
-  
-        console.log('Final URL for redirection:', resultURL);
-  
-        // Route using the constructed URL
-        router.push(resultURL);
+
+        // Route to the result page with the query parameters
+        router.push(`/result?${params.toString()}`);
       } else {
-        console.error('API response was not OK or missing lat/lng:', data.message);
         alert(`Error: ${data.message}`);
       }
     } catch (error) {
       console.error('Error fetching geolocation data:', error.message);
       alert('Error fetching geolocation data.');
     }
-  };
-  
-
-  const handleButtonClick = () => {
-    console.log('Submit button clicked');
   };
 
   return (
@@ -107,14 +86,10 @@ const PropertyValuationHero = () => {
             placeholder="Enter your address"
             className="w-full md:w-1/3 px-3 py-2 rounded-lg focus:outline-none text-gray-900 mb-4 md:mb-0 md:mr-2"
             value={address}
-            onChange={(e) => {
-              setAddress(e.target.value);
-              console.log('Address input updated:', e.target.value);
-            }}
+            onChange={(e) => setAddress(e.target.value)}
           />
           <button
             type="submit"
-            onClick={handleButtonClick} // Extra logging to ensure button click is captured
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold transition duration-300"
           >
             Get Started
@@ -124,6 +99,7 @@ const PropertyValuationHero = () => {
     </div>
   );
 };
+
 
 // FAQ Component (Smaller and Centered)
 const FAQ = () => {
@@ -232,10 +208,34 @@ const Footer = () => {
   );
 };
 
-
 // Main App Component
 export default function RealEstateApp() {
-  console.log("RealEstateApp component rendered");
+  useEffect(() => {
+    console.log("RealEstateApp component rendered");
+
+    // Test connection to Supabase and fetch rows from the table
+    const testSupabaseConnection = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles') // Replace with your actual table name
+          .select('*'); // Select all rows
+
+        if (error) {
+          console.error('Error accessing Supabase table:', error.message);
+        } else if (data.length === 0) {
+          console.log('Connected to Supabase, but no rows found in the table.');
+        } else {
+          console.log('Connected to Supabase. Data:', data);
+        }
+      } catch (error) {
+        console.error('Error testing Supabase connection:', error.message);
+      }
+    };
+
+    // Run the test
+    testSupabaseConnection();
+  }, []);
+
   return (
     <div className="bg-white min-h-screen">
       <Suspense fallback={<div>Loading...</div>}>

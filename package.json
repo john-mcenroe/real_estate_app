@@ -18,6 +18,7 @@
     "eslint": "8.47.0",
     "eslint-config-next": "13.4.19",
     "form-data": "^4.0.0",
+    "haversine-distance": "^1.2.3",
     "lucide-react": "^0.446.0",
     "mailgun.js": "^9.4.1",
     "mongodb": "^5.9.2",
