@@ -24,7 +24,7 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
 
 // Helper function to calculate median
 function calculateMedian(arr) {
-  const sortedArr = arr.sort((a, b) => a - b);
+  const sortedArr = [...arr].sort((a, b) => a - b);
   const mid = Math.floor(sortedArr.length / 2);
 
   return sortedArr.length % 2 !== 0
@@ -34,7 +34,7 @@ function calculateMedian(arr) {
 
 // Helper function to calculate the 75% confidence bands
 function calculateConfidenceBands(arr) {
-  const sortedArr = arr.sort((a, b) => a - b);
+  const sortedArr = [...arr].sort((a, b) => a - b);
   const lowerQuartile = sortedArr[Math.floor(sortedArr.length * 0.25)];
   const upperQuartile = sortedArr[Math.floor(sortedArr.length * 0.75)];
   return { lowerQuartile, upperQuartile };
@@ -52,7 +52,7 @@ export default function ResultPage() {
   const lng = parseFloat(searchParams.get('lng'));
   const address = searchParams.get('address');
 
-  // Check the lat/lng parameters
+  // Debugging: Check the lat/lng parameters
   console.log('Latitude:', lat);
   console.log('Longitude:', lng);
 
@@ -63,7 +63,7 @@ export default function ResultPage() {
       try {
         const { data, error } = await supabase
           .from('scraped_property_data_v1')  // Table name
-          .select('*, latitude, longitude, sale_date, myhome_link');  // Fetch myhome_link column
+          .select('*, latitude, longitude, sale_date, myhome_link, asking_price, asking_date');  // Fetch additional columns
 
         if (error) {
           console.error('Error fetching data:', error.message);
@@ -74,7 +74,12 @@ export default function ResultPage() {
           const propertiesWithDistance = data
             .filter(property => property.latitude && property.longitude)  // Ensure latitude and longitude exist
             .map((property) => {
-              const distance = haversineDistance(lat, lng, parseFloat(property.latitude), parseFloat(property.longitude));
+              const distance = haversineDistance(
+                lat,
+                lng,
+                parseFloat(property.latitude),
+                parseFloat(property.longitude)
+              );
               return { ...property, distance };
             })
             .sort((a, b) => a.distance - b.distance)
@@ -98,13 +103,20 @@ export default function ResultPage() {
       }
     };
 
-    fetchProperties();
+    if (!isNaN(lat) && !isNaN(lng)) {
+      fetchProperties();
+    } else {
+      console.warn('Invalid latitude or longitude parameters.');
+      setLoading(false);
+    }
   }, [lat, lng]);
 
   return (
     <div className="container mx-auto px-4 py-6">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="col-span-1 bg-gray-100 p-6 rounded-lg shadow-md">
+      {/* House Details and Value Estimate */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* House Details */}
+        <div className="bg-gray-100 p-6 rounded-lg shadow-md">
           <h2 className="text-lg font-semibold mb-4">House Details</h2>
           {address ? (
             <div>
@@ -115,7 +127,8 @@ export default function ResultPage() {
           )}
         </div>
 
-        <div className="col-span-1 bg-gray-100 p-6 rounded-lg shadow-md">
+        {/* Value Estimate */}
+        <div className="bg-gray-100 p-6 rounded-lg shadow-md">
           <h2 className="text-lg font-semibold mb-4">Value Estimate</h2>
           {medianPrice !== null ? (
             <>
@@ -133,17 +146,18 @@ export default function ResultPage() {
         </div>
       </div>
 
+      {/* Similar Properties */}
       <div className="mt-8">
         <h2 className="text-xl font-semibold mb-4">Similar Properties</h2>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {loading ? (
             <p>Loading properties...</p>
           ) : (
             properties.length > 0 ? (
               properties.map((property, index) => (
                 <div key={index} className="border p-4 rounded-lg shadow-md">
-                  <p>
-                    <strong>Address:</strong>{" "}
+                  {/* Address */}
+                  <p className="font-semibold">
                     {property.myhome_link ? (
                       <a
                         href={property.myhome_link}
@@ -157,15 +171,41 @@ export default function ResultPage() {
                       property.address
                     )}
                   </p>
-                  <p><strong>Price:</strong> €{property.sale_price.toLocaleString('en-IE')}</p>
-                  <div className="grid grid-cols-1 gap-1">
+
+                  {/* Distance */}
+                  <p className="text-sm text-gray-500 mt-1">
+                    Distance from your location: {property.distance ? property.distance.toFixed(2) : 'N/A'} km
+                  </p>
+
+                  {/* Price Sold and Date Sold */}
+                  <div className="flex justify-between mt-3">
+                    <div>
+                      <p className="text-sm">
+                        <strong>Price Sold:</strong> €{property.sale_price.toLocaleString('en-IE')}
+                      </p>
+                      <p className="text-sm">
+                        <strong>Date Sold:</strong> {property.sale_date ? new Date(property.sale_date).toLocaleDateString() : 'N/A'}
+                      </p>
+                    </div>
+
+                    {/* Price Asked and Date Asked */}
+                    <div>
+                      <p className="text-sm">
+                        <strong>Price Asked:</strong> {property.asking_price ? `€${parseFloat(property.asking_price).toLocaleString('en-IE')}` : 'N/A'}
+                      </p>
+                      <p className="text-sm">
+                        <strong>Date Asked:</strong> {property.asking_date ? new Date(property.asking_date).toLocaleDateString() : 'N/A'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Beds/Baths/BER/Size */}
+                  <div className="grid grid-cols-2 gap-2 mt-3 text-sm">
                     <p><strong>Beds:</strong> {property.beds.includes('Bed') ? property.beds : `${property.beds} Bed`}</p>
                     <p><strong>Baths:</strong> {property.baths.includes('Bath') ? property.baths : `${property.baths} Bath`}</p>
                     <p><strong>BER:</strong> {property.energy_rating}</p>
-                    <p><strong>Size:</strong> {property.myhome_floor_area_value}</p>
+                    <p><strong>Size:</strong> {property.myhome_floor_area_value} m²</p>
                   </div>
-                  <p><strong>Distance from your location:</strong> {property.distance ? property.distance.toFixed(2) : 'N/A'} km</p>
-                  <p><strong>Date Sold:</strong> {property.sale_date ? property.sale_date : 'N/A'}</p>
                 </div>
               ))
             ) : (
