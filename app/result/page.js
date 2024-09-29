@@ -63,7 +63,7 @@ export default function ResultPage() {
       try {
         const { data, error } = await supabase
           .from('scraped_property_data_v1')  // Table name
-          .select('*, latitude, longitude, sale_date, sale_price, myhome_link, asking_price');  // Removed 'asking_date'
+          .select('*, latitude, longitude, sale_date, sale_price, myhome_link, asking_price, first_list_date');  // Added 'first_list_date'
 
         if (error) {
           console.error('Error fetching data:', error.message);
@@ -188,10 +188,14 @@ export default function ResultPage() {
                       </p>
                     </div>
 
-                    {/* Price Asked and Date Asked */}
+                    {/* Price Asked and First List Date */}
                     <div>
                       <p className="text-sm">
                         <strong>Price Asked:</strong> {property.asking_price ? `€${parseFloat(property.asking_price).toLocaleString('en-IE')}` : 'N/A'}
+                      </p>
+                      {/* Added First List Date */}
+                      <p className="text-sm">
+                        <strong>First List Date:</strong> {property.first_list_date ? new Date(property.first_list_date).toLocaleDateString() : 'N/A'}
                       </p>
                       {/* Removed Date Asked as 'asking_date' doesn't exist */}
                     </div>
