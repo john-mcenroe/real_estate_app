@@ -83,7 +83,7 @@ function ResultComponent() {
               return { ...property, distance };
             })
             .sort((a, b) => a.distance - b.distance)
-            .slice(0, 21);  // Limit to top 21 properties based on distance
+            .slice(0, 35);  // Limit to top 21 properties based on distance
 
           console.log('Filtered properties with distance:', propertiesWithDistance);  // Debugging line
 

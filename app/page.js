@@ -1,18 +1,17 @@
 'use client';
 
-import React, { Suspense, useState, useEffect } from 'react';
-import { supabase } from '../libs/supabaseClient'; // Import your Supabase client
-import { ChevronDown } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation'; // Next.js routing
+import Script from 'next/script'; // Next.js Script component
+import { FaChevronDown } from 'react-icons/fa'; // ChevronDown icon from Font Awesome
 
 // Header Component
 const Header = () => {
-  console.log("Header component rendered");
   return (
     <header className="bg-white shadow-sm">
       <nav className="container mx-auto px-4 py-3">
         <div className="flex justify-between items-center">
-          <div className="text-l font-bold text-blue-700">PriceMyPlace.ie</div>
+          <div className="text-lg font-bold text-blue-700">PriceMyPlace.ie</div>
           <div className="hidden md:flex space-x-4">
             <a href="#" className="text-gray-600 hover:text-blue-700">Home</a>
             <a href="#" className="text-gray-600 hover:text-blue-700">About</a>
@@ -23,11 +22,42 @@ const Header = () => {
   );
 };
 
-// PropertyValuationHero Component
+// PropertyValuationHero Component with Google Places Autocomplete
 const PropertyValuationHero = () => {
   const [address, setAddress] = useState('');
+  const autocompleteRef = useRef(null);
+  const inputRef = useRef(null);
   const router = useRouter();
 
+  // Geocode the selected address to validate its location (Optional - Server-Side Validation)
+  const geocodeAddress = async (address) => {
+    try {
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
+      );
+      const data = await response.json();
+
+      if (data.results.length === 0) {
+        return null;
+      }
+
+      // Check if the result is from Ireland (IE)
+      const countryComponent = data.results[0].address_components.find((component) =>
+        component.types.includes('country')
+      );
+
+      if (countryComponent && countryComponent.short_name === 'IE') {
+        return data.results[0];
+      } else {
+        return null; // Address is not in Ireland
+      }
+    } catch (error) {
+      console.error('Error fetching geolocation data:', error.message);
+      return null;
+    }
+  };
+
+  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -36,72 +66,107 @@ const PropertyValuationHero = () => {
       return;
     }
 
-    try {
-      // Fetch geolocation data
-      const response = await fetch('/api/geocode', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ address }),
+    const geocodedResult = await geocodeAddress(address); // Optional server-side validation
+
+    if (!geocodedResult) {
+      alert('Please select a valid address in Ireland.');
+      return;
+    }
+
+    // Proceed if valid
+    const params = new URLSearchParams({
+      lat: geocodedResult.geometry.location.lat,
+      lng: geocodedResult.geometry.location.lng,
+      address: geocodedResult.formatted_address,
+    });
+
+    router.push(`/result?${params.toString()}`);
+  };
+
+  // Initialize Autocomplete after Google Maps script loads
+  const handleScriptLoad = () => {
+    if (window.google) {
+      const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
+        types: ['address'], // Restrict to addresses
+        componentRestrictions: { country: 'ie' }, // Restrict results to Ireland
+        fields: ['address_components', 'formatted_address', 'geometry'],
       });
 
-      const data = await response.json();
+      autocomplete.addListener('place_changed', () => {
+        const place = autocomplete.getPlace();
 
-      if (response.ok && data.lat && data.lng) {
-        // Use URLSearchParams to construct the query string
-        const params = new URLSearchParams({
-          lat: data.lat.toString(),
-          lng: data.lng.toString(),
-          address: data.address,
-        });
+        if (!place.geometry) {
+          alert('No details available for input: "' + place.name + '"');
+          return;
+        }
 
-        // Route to the result page with the query parameters
-        router.push(`/result?${params.toString()}`);
-      } else {
-        alert(`Error: ${data.message}`);
-      }
-    } catch (error) {
-      console.error('Error fetching geolocation data:', error.message);
-      alert('Error fetching geolocation data.');
+        // Validate that the place is in Ireland
+        const countryComponent = place.address_components.find((component) =>
+          component.types.includes('country')
+        );
+
+        if (countryComponent && countryComponent.short_name !== 'IE') {
+          alert('Please select an address in Ireland.');
+          setAddress('');
+          return;
+        }
+
+        setAddress(place.formatted_address);
+      });
+
+      autocompleteRef.current = autocomplete;
     }
   };
 
   return (
-    <div
-      className="relative bg-cover bg-center text-gray-800 py-24"
-      style={{
-        backgroundImage: "url('/pexels-photo-dublin.jpeg')",
-      }}
-    >
-      <div className="absolute inset-0 bg-black opacity-50"></div>
-      <div className="container mx-auto px-4 relative z-10 text-center">
-        <h1 className="text-3xl font-bold mb-2 text-white">How Much Is My Home Worth?</h1>
-        <p className="text-m mb-6 text-gray-200">
-          Enter your address to get an instant estimate.
-        </p>
-        <form onSubmit={handleSubmit} className="flex justify-center flex-col md:flex-row items-center">
-          <input
-            type="text"
-            placeholder="Enter your address"
-            className="w-full md:w-1/3 px-3 py-2 rounded-lg focus:outline-none text-gray-900 mb-4 md:mb-0 md:mr-2"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-          />
-          <button
-            type="submit"
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold transition duration-300"
+    <>
+      <Script
+        src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places&region=IE`}
+        strategy="afterInteractive"
+        onLoad={handleScriptLoad}
+      />
+
+      <div
+        className="relative bg-cover bg-center text-gray-800 py-24"
+        style={{
+          backgroundImage: "url('/pexels-photo-dublin.jpeg')",
+        }}
+      >
+        <div className="absolute inset-0 bg-black opacity-50"></div>
+        <div className="container mx-auto px-4 relative z-10 text-center">
+          <h1 className="text-3xl font-bold mb-2 text-white">How Much Is My Home Worth?</h1>
+          <p className="text-md mb-6 text-gray-200">Enter your address to get an instant estimate.</p>
+          <form
+            onSubmit={handleSubmit}
+            className="flex flex-col items-center sm:flex-row sm:justify-center sm:space-x-4 space-y-4 sm:space-y-0 max-w-2xl mx-auto w-full"
           >
-            Get Valuation
-          </button>
-        </form>
+            <div className="w-full sm:w-3/4 lg:w-2/3">
+              <input
+                id="address"
+                type="text"
+                placeholder="Enter your address"
+                className="w-full px-4 py-3 rounded-lg focus:outline-none text-gray-900 shadow-md"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                ref={inputRef}
+                aria-label="Property Address"
+                autoComplete="off"
+              />
+            </div>
+            <button
+              type="submit"
+              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition duration-300 shadow-md"
+            >
+              Get Valuation
+            </button>
+          </form>
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 
-
-// FAQ Component (Smaller and Centered)
+// FAQ Component (fixed with FaChevronDown import)
 const FAQ = () => {
   const faqs = [
     {
@@ -152,8 +217,9 @@ const FAQ = () => {
                 aria-controls={`faq-${index}`}
               >
                 <span className="text-sm font-semibold text-gray-800">{faq.question}</span>
-                <ChevronDown
+                <FaChevronDown
                   className={`text-blue-600 transition-transform duration-300 ${expandedIndices.includes(index) ? 'transform rotate-180' : ''}`}
+                  aria-hidden="true"
                 />
               </button>
               {expandedIndices.includes(index) && (
@@ -169,13 +235,12 @@ const FAQ = () => {
 
 // Footer Component with Smaller and Responsive Font
 const Footer = () => {
-  console.log("Footer component rendered");
   return (
     <footer className="bg-gray-100 text-gray-600 py-6">
       <div className="container mx-auto px-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
-            <h3 className="text-sm md:text-md font-semibold mb-2">HomeWorth</h3>
+            <h3 className="text-sm md:text-md font-semibold mb-2">PriceMyPlace.ie</h3>
             <p className="text-xs md:text-sm">AI-powered home valuations.</p>
           </div>
           <div>
@@ -201,7 +266,7 @@ const Footer = () => {
           </div>
         </div>
         <div className="mt-6 text-center text-xs md:text-sm">
-          <p>&copy; 2024 RealEstateGen. All rights reserved.</p>
+          <p>&copy; 2024 PriceMyPlace.ie. All rights reserved.</p>
         </div>
       </div>
     </footer>
@@ -210,37 +275,9 @@ const Footer = () => {
 
 // Main App Component
 export default function RealEstateApp() {
-  useEffect(() => {
-    console.log("App component rendered");
-
-    // Test connection to Supabase and fetch rows from the table
-    const testSupabaseConnection = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('profiles') // Replace with your actual table name
-          .select('*'); // Select all rows
-
-        if (error) {
-          console.error('Error accessing Supabase table:', error.message);
-        } else if (data.length === 0) {
-          console.log('Connected to Supabase, but no rows found in the table.');
-        } else {
-          console.log('Connected to Supabase. Data:', data);
-        }
-      } catch (error) {
-        console.error('Error testing Supabase connection:', error.message);
-      }
-    };
-
-    // Run the test
-    testSupabaseConnection();
-  }, []);
-
   return (
     <div className="bg-white min-h-screen">
-      <Suspense fallback={<div>Loading...</div>}>
-        <Header />
-      </Suspense>
+      <Header />
       <main>
         <PropertyValuationHero />
         <FAQ />
