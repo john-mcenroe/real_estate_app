@@ -1,8 +1,8 @@
-'use client'; // Enable client-side rendering
+"use client";  // Ensure the component is client-side rendered
 
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { supabase } from '../../libs/supabaseClient'; // Adjust path to point to supabase client
+import { supabase } from '../../libs/supabaseClient';
 
 // Haversine formula to calculate the distance between two points
 function haversineDistance(lat1, lon1, lat2, lon2) {
@@ -40,7 +40,7 @@ function calculateConfidenceBands(arr) {
   return { lowerQuartile, upperQuartile };
 }
 
-export default function ResultPage() {
+function ResultComponent() {
   const searchParams = useSearchParams();
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -156,7 +156,6 @@ export default function ResultPage() {
             properties.length > 0 ? (
               properties.map((property, index) => (
                 <div key={index} className="border p-4 rounded-lg shadow-md">
-                  {/* Address */}
                   <p className="font-semibold">
                     {property.myhome_link ? (
                       <a
@@ -172,12 +171,10 @@ export default function ResultPage() {
                     )}
                   </p>
 
-                  {/* Distance */}
                   <p className="text-sm text-gray-500 mt-1">
                     Distance from your location: {property.distance ? property.distance.toFixed(2) : 'N/A'} km
                   </p>
 
-                  {/* Price Sold and Date Sold */}
                   <div className="flex justify-between mt-3">
                     <div>
                       <p className="text-sm">
@@ -188,20 +185,16 @@ export default function ResultPage() {
                       </p>
                     </div>
 
-                    {/* Price Asked and First List Date */}
                     <div>
                       <p className="text-sm">
                         <strong>Price Asked:</strong> {property.asking_price ? `€${parseFloat(property.asking_price).toLocaleString('en-IE')}` : 'N/A'}
                       </p>
-                      {/* Added First List Date */}
                       <p className="text-sm">
                         <strong>First List Date:</strong> {property.first_list_date ? new Date(property.first_list_date).toLocaleDateString() : 'N/A'}
                       </p>
-                      {/* Removed Date Asked as 'asking_date' doesn't exist */}
                     </div>
                   </div>
 
-                  {/* Beds/Baths/BER/Size */}
                   <div className="grid grid-cols-2 gap-2 mt-3 text-sm">
                     <p><strong>Beds:</strong> {property.beds.includes('Bed') ? property.beds : `${property.beds} Bed`}</p>
                     <p><strong>Baths:</strong> {property.baths.includes('Bath') ? property.baths : `${property.baths} Bath`}</p>
@@ -217,5 +210,13 @@ export default function ResultPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ResultPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ResultComponent />
+    </Suspense>
   );
 }
