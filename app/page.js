@@ -57,66 +57,69 @@ const PropertyValuationHero = () => {
     }
   };
 
-  // Handle form submission
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+// Handle form submission
+const handleSubmit = async (e) => {
+  // Check if the event object exists (when called manually it won't exist)
+  if (e) {
+    e.preventDefault(); // Prevent default form submission behavior if the event exists
+  }
 
-    if (address.trim() === '') {
-      alert('Please enter an Irish address.');
-      return;
+  if (address.trim() === '') {
+    // Do nothing if no address is entered
+    return;
+  }
+
+  const geocodedResult = await geocodeAddress(address); // Optional server-side validation
+
+  if (!geocodedResult) {
+    // Do nothing if the address is invalid
+    return;
+  }
+
+  // Proceed if valid
+  const params = new URLSearchParams({
+    lat: geocodedResult.geometry.location.lat,
+    lng: geocodedResult.geometry.location.lng,
+    address: geocodedResult.formatted_address,
+  });
+
+  // Navigate to the results page
+  router.push(`/result?${params.toString()}`);
+};
+
+
+// Handle place selection
+const handlePlaceChange = () => {
+  const place = autocompleteRef.current.getPlace();
+
+  if (place.geometry) {
+    // Validate that the place is in Ireland
+    const countryComponent = place.address_components.find((component) =>
+      component.types.includes('country')
+    );
+
+    if (countryComponent && countryComponent.short_name === 'IE') {
+      // Set the address and submit the form without showing alerts
+      setAddress(place.formatted_address);
+      handleSubmit();
     }
+  }
+};
 
-    const geocodedResult = await geocodeAddress(address); // Optional server-side validation
-
-    if (!geocodedResult) {
-      alert('Please select a valid address in Ireland.');
-      return;
-    }
-
-    // Proceed if valid
-    const params = new URLSearchParams({
-      lat: geocodedResult.geometry.location.lat,
-      lng: geocodedResult.geometry.location.lng,
-      address: geocodedResult.formatted_address,
+// Initialize Autocomplete after Google Maps script loads
+const handleScriptLoad = () => {
+  if (window.google) {
+    const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
+      types: ['address'], // Restrict to addresses
+      componentRestrictions: { country: 'ie' }, // Restrict results to Ireland
+      fields: ['address_components', 'formatted_address', 'geometry'],
     });
 
-    router.push(`/result?${params.toString()}`);
-  };
+    autocomplete.addListener('place_changed', handlePlaceChange);
 
-  // Initialize Autocomplete after Google Maps script loads
-  const handleScriptLoad = () => {
-    if (window.google) {
-      const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
-        types: ['address'], // Restrict to addresses
-        componentRestrictions: { country: 'ie' }, // Restrict results to Ireland
-        fields: ['address_components', 'formatted_address', 'geometry'],
-      });
-
-      autocomplete.addListener('place_changed', () => {
-        const place = autocomplete.getPlace();
-
-        if (!place.geometry) {
-          alert('No details available for input: "' + place.name + '"');
-          return;
-        }
-
-        // Validate that the place is in Ireland
-        const countryComponent = place.address_components.find((component) =>
-          component.types.includes('country')
-        );
-
-        if (countryComponent && countryComponent.short_name !== 'IE') {
-          alert('Please select an address in Ireland.');
-          setAddress('');
-          return;
-        }
-
-        setAddress(place.formatted_address);
-      });
-
-      autocompleteRef.current = autocomplete;
-    }
-  };
+    autocompleteRef.current = autocomplete;
+  }
+};
 
   return (
     <>
