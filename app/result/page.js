@@ -3,192 +3,88 @@
 import { Suspense, useState, useEffect, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { supabase } from "../../libs/supabaseClient";
-
-// Helper Functions
-
-/**
- * Calculates the Haversine distance between two geographic coordinates.
- * @param {number} lat1 - Latitude of the first location.
- * @param {number} lon1 - Longitude of the first location.
- * @param {number} lat2 - Latitude of the second location.
- * @param {number} lon2 - Longitude of the second location.
- * @returns {number} - Distance in kilometers.
- */
-const haversineDistance = (lat1, lon1, lat2, lon2) => {
-  const toRad = (x) => (x * Math.PI) / 180;
-  const R = 6371; // Radius of Earth in kilometers
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) *
-      Math.cos(toRad(lat2)) *
-      Math.sin(dLon / 2) ** 2;
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  return R * c; // Distance in kilometers
-};
-
-/**
- * Calculates the median of an array of numbers.
- * @param {number[]} arr - Array of numbers.
- * @returns {number|null} - Median value or null if array is empty.
- */
-const calculateMedian = (arr) => {
-  if (arr.length === 0) return null;
-  const sortedArr = [...arr].sort((a, b) => a - b);
-  const mid = Math.floor(sortedArr.length / 2);
-  return sortedArr.length % 2 !== 0
-    ? sortedArr[mid]
-    : (sortedArr[mid - 1] + sortedArr[mid]) / 2;
-};
-
-/**
- * Calculates the 25th and 75th percentiles of an array of numbers.
- * @param {number[]} arr - Array of numbers.
- * @returns {Object} - Object containing lowerQuartile and upperQuartile.
- */
-const calculateConfidenceBands = (arr) => {
-  if (arr.length === 0) return { lowerQuartile: null, upperQuartile: null };
-  const sortedArr = [...arr].sort((a, b) => a - b);
-  const lowerIndex = Math.floor(sortedArr.length * 0.25);
-  const upperIndex = Math.floor(sortedArr.length * 0.75);
-  const lowerQuartile = sortedArr[lowerIndex];
-  const upperQuartile = sortedArr[upperIndex];
-  return { lowerQuartile, upperQuartile };
-};
-
-/**
- * Calculates a multi-dimensional distance metric based on property features.
- * @param {Object} property - Property object.
- * @param {Object} inputs - User inputs containing beds, baths, size, lat, lng.
- * @param {Object} featureWeights - Weights for each feature.
- * @returns {Object} - Object containing totalDistance and geoDistance.
- */
-const calculateMultiDimensionalDistance = (property, inputs, featureWeights) => {
-  const { bedsWeight, bathsWeight, sizeWeight, locationWeight } = featureWeights;
-
-  // Define maximum expected differences for normalization
-  const MAX_BEDS_DIFF = 5; // Adjust based on your data
-  const MAX_BATHS_DIFF = 5; // Adjust based on your data
-  const MAX_SIZE_DIFF = 300; // Adjust based on your data
-  const MAX_GEO_DISTANCE = 100; // Maximum distance considered is 100 km
-
-  const bedsDiff = Math.min(Math.abs(property.beds - inputs.beds) / MAX_BEDS_DIFF, 1);
-  const bathsDiff = Math.min(Math.abs(property.baths - inputs.baths) / MAX_BATHS_DIFF, 1);
-  const sizeDiff = Math.min(Math.abs(property.myhome_floor_area_value - inputs.size) / MAX_SIZE_DIFF, 1);
-
-  const geoDistance = Math.min(
-    haversineDistance(
-      inputs.lat,
-      inputs.lng,
-      parseFloat(property.latitude),
-      parseFloat(property.longitude)
-    ),
-    MAX_GEO_DISTANCE
-  ); // Distance in km
-
-  const normalizedGeoDistance = geoDistance / MAX_GEO_DISTANCE; // Normalize to 0-1
-
-  const totalDistance =
-    bedsWeight * bedsDiff +
-    bathsWeight * bathsDiff +
-    sizeWeight * sizeDiff +
-    locationWeight * normalizedGeoDistance;
-
-  return { totalDistance, geoDistance };
-};
+import {
+  haversineDistance,
+  calculateMedian,
+  calculateConfidenceBands,
+  getPropertyCategory,
+  calculateSimilarity,
+} from "../utils"; // Adjust the path as necessary
 
 function ResultComponent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [properties, setProperties] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [medianPrice, setMedianPrice] = useState(null);
-  const [confidenceBands, setConfidenceBands] = useState(null);
-  const [error, setError] = useState(null); // State to handle errors
 
-  // Extract latitude, longitude, and address from query params
-  const lat = parseFloat(searchParams.get("lat")) || 0;
-  const lng = parseFloat(searchParams.get("lng")) || 0;
-  const address = searchParams.get("address");
+  const latParam = parseFloat(searchParams.get("lat"));
+  const lngParam = parseFloat(searchParams.get("lng"));
 
-  // Default fallback values for beds, baths, size
-  const [beds, setBeds] = useState(parseFloat(searchParams.get("beds")) || 1);
-  const [baths, setBaths] = useState(parseFloat(searchParams.get("baths")) || 1);
-  const [size, setSize] = useState(parseFloat(searchParams.get("size")) || 30);
+  // Main state holding applied filters and results
+  const [state, setState] = useState({
+    properties: [],
+    loading: true,
+    medianPrice: null,
+    confidenceBands: null,
+    error: null,
+    inputs: {
+      lat: isNaN(latParam) ? null : latParam,
+      lng: isNaN(lngParam) ? null : lngParam,
+      address: searchParams.get("address") || "",
+      beds: parseInt(searchParams.get("beds"), 10) || 1,
+      baths: parseInt(searchParams.get("baths"), 10) || 1,
+      size: parseInt(searchParams.get("size"), 10) || 30,
+    },
+  });
 
-  // Number of top properties to consider for valuation
-  const TOP_N = 10;
+  // Separate state for filter inputs
+  const [filterInputs, setFilterInputs] = useState({
+    beds: state.inputs.beds,
+    baths: state.inputs.baths,
+    size: state.inputs.size,
+  });
 
-  // Feature Weights (Adjust these weights as needed)
-  const featureWeights = {
-    bedsWeight: 1,
-    bathsWeight: 1,
-    sizeWeight: 1,
-    locationWeight: 2, // Giving more weight to location
-  };
+  const { beds, baths, size, lat, lng, address } = state.inputs;
 
-  /**
-   * Handles changes to the beds input.
-   */
-  const handleBedsChange = (e) => {
-    const newBeds = parseInt(e.target.value, 10) || 1;
-    setBeds(newBeds);
-    updateURL(newBeds, baths, size);
-  };
+  const TOP_N = 30;
 
-  /**
-   * Handles changes to the baths input.
-   */
-  const handleBathsChange = (e) => {
-    const newBaths = parseInt(e.target.value, 10) || 1;
-    setBaths(newBaths);
-    updateURL(beds, newBaths, size);
-  };
-
-  /**
-   * Handles changes to the size input.
-   */
-  const handleSizeChange = (e) => {
-    const newSize = parseInt(e.target.value, 10) || 30;
-    setSize(newSize);
-    updateURL(beds, baths, newSize);
-  };
-
-  /**
-   * Updates the URL search parameters based on user inputs.
-   * @param {number} newBeds - Updated number of beds.
-   * @param {number} newBaths - Updated number of baths.
-   * @param {number} newSize - Updated size in m².
-   */
-  const updateURL = (newBeds, newBaths, newSize) => {
+  // Function to update the URL based on applied filters
+  const updateURL = (newInputs) => {
     const params = new URLSearchParams({
-      lat: lat.toString(),
-      lng: lng.toString(),
-      beds: newBeds.toString(),
-      baths: newBaths.toString(),
-      size: newSize.toString(),
+      lat: newInputs.lat.toString(),
+      lng: newInputs.lng.toString(),
+      beds: newInputs.beds.toString(),
+      baths: newInputs.baths.toString(),
+      size: newInputs.size.toString(),
     });
 
-    // Include address if it exists
-    if (address) {
-      params.set("address", address);
+    if (newInputs.address) {
+      params.set("address", newInputs.address);
     }
 
     router.push(`?${params.toString()}`);
   };
 
-  /**
-   * Fetches properties from Supabase and processes them.
-   */
+  // Handle input changes for filterInputs
+  const handleChange = (field) => (e) => {
+    const value = parseInt(e.target.value, 10);
+    setFilterInputs((prev) => ({ ...prev, [field]: value }));
+  };
+
+  // Handle "Recalculate" button click
+  const handleRecalculate = () => {
+    const newInputs = {
+      ...state.inputs,
+      beds: filterInputs.beds,
+      baths: filterInputs.baths,
+      size: filterInputs.size,
+    };
+    setState((prev) => ({ ...prev, inputs: newInputs }));
+    updateURL(newInputs);
+  };
+
   const fetchProperties = useCallback(async () => {
-    setLoading(true);
-    setError(null); // Reset previous errors
+    setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
-      // Fetch data from Supabase
-      const { data, error: fetchError } = await supabase
+      const { data, error } = await supabase
         .from("scraped_property_data_v1")
         .select(`
           *,
@@ -206,118 +102,111 @@ function ResultComponent() {
           address
         `);
 
-      if (fetchError) throw new Error(fetchError.message);
+      if (error) throw new Error(error.message);
+      if (!Array.isArray(data)) throw new Error("Invalid data format.");
 
-      console.log("Fetched Data:", data); // Debugging
+      console.log("Fetched data:", data);
 
-      if (!Array.isArray(data)) {
-        throw new Error("Unexpected data format received from Supabase.");
-      }
+      const filtered = data.filter(
+        (p) =>
+          p.latitude &&
+          p.longitude &&
+          !isNaN(parseFloat(p.latitude)) &&
+          !isNaN(parseFloat(p.longitude)) &&
+          p.myhome_floor_area_value != null &&
+          !isNaN(parseFloat(p.myhome_floor_area_value)) &&
+          p.beds != null &&
+          !isNaN(parseInt(p.beds, 10)) &&
+          p.baths != null &&
+          !isNaN(parseInt(p.baths, 10))
+      );
 
-      // Filter out properties with missing or invalid data
-      const filteredProperties = data.filter((property) => {
-        const hasValidCoordinates =
-          property.latitude &&
-          property.longitude &&
-          !isNaN(parseFloat(property.latitude)) &&
-          !isNaN(parseFloat(property.longitude));
+      console.log("Filtered properties:", filtered);
 
-        const hasValidDetails =
-          property.myhome_floor_area_value != null &&
-          !isNaN(parseFloat(property.myhome_floor_area_value)) &&
-          property.beds != null &&
-          !isNaN(parseInt(property.beds, 10)) &&
-          property.baths != null &&
-          !isNaN(parseInt(property.baths, 10));
-
-        return hasValidCoordinates && hasValidDetails;
-      });
-
-      console.log("Filtered Properties:", filteredProperties); // Debugging
-
-      if (filteredProperties.length === 0) {
-        console.warn("No properties after filtering.");
-        setProperties([]);
-        setMedianPrice(null);
-        setConfidenceBands(null);
-        setLoading(false);
+      if (!filtered.length) {
+        setState((prev) => ({
+          ...prev,
+          properties: [],
+          medianPrice: null,
+          confidenceBands: null,
+          loading: false,
+        }));
         return;
       }
 
-      // Define input parameters
-      const inputParams = { beds, baths, size, lat, lng };
-
-      // Calculate multi-dimensional distance for each property
-      const propertiesWithDistance = filteredProperties
-        .map((property) => {
-          const { totalDistance, geoDistance } = calculateMultiDimensionalDistance(
-            property,
-            inputParams,
-            featureWeights
-          );
-          return { ...property, totalDistance, geoDistance };
+      // Calculate similarity scores
+      const propertiesWithSimilarity = filtered
+        .map((property) => calculateSimilarity(property, state.inputs))
+        .filter((p) => p.categoryScore > 0) // Ensure at least one category matches
+        .sort((a, b) => {
+          // Higher categoryScore is better; if equal, closer distance is better
+          if (b.categoryScore !== a.categoryScore) {
+            return b.categoryScore - a.categoryScore;
+          }
+          return a.distance - b.distance;
         })
-        .filter((property) => property.totalDistance <= 2.0) // Adjusted threshold
-        .sort((a, b) => a.totalDistance - b.totalDistance) // Sort ascending based on totalDistance
-        .slice(0, TOP_N); // Take top N properties
+        .slice(0, TOP_N);
 
-      console.log("Properties with Distance:", propertiesWithDistance); // Debugging
+      console.log("Properties with similarity:", propertiesWithSimilarity);
 
-      if (propertiesWithDistance.length === 0) {
-        console.warn("No properties after distance filtering.");
-        setProperties([]);
-        setMedianPrice(null);
-        setConfidenceBands(null);
-        setLoading(false);
+      if (!propertiesWithSimilarity.length) {
+        setState((prev) => ({
+          ...prev,
+          properties: [],
+          medianPrice: null,
+          confidenceBands: null,
+          loading: false,
+        }));
         return;
       }
 
-      // Valuation based on top N properties
-      const topPrices = propertiesWithDistance
-        .map((property) => parseFloat(property.sale_price))
+      const topPrices = propertiesWithSimilarity
+        .map((p) => parseFloat(p.sale_price))
         .filter((price) => !isNaN(price) && price > 0);
 
-      console.log("Top Prices:", topPrices); // Debugging
-
-      if (topPrices.length > 0) {
-        setMedianPrice(calculateMedian(topPrices));
-        setConfidenceBands(calculateConfidenceBands(topPrices));
-      } else {
-        console.warn("No valid prices found for valuation.");
-        setMedianPrice(null);
-        setConfidenceBands(null);
-      }
-
-      setProperties(propertiesWithDistance);
+      setState((prev) => ({
+        ...prev,
+        properties: propertiesWithSimilarity,
+        medianPrice: topPrices.length ? calculateMedian(topPrices) : null,
+        confidenceBands: topPrices.length
+          ? calculateConfidenceBands(topPrices)
+          : { lowerQuartile: null, upperQuartile: null },
+        loading: false,
+      }));
     } catch (err) {
-      setError(err.message || "An unexpected error occurred.");
       console.error("Error fetching properties:", err);
-    } finally {
-      setLoading(false);
+      setState((prev) => ({
+        ...prev,
+        error: err.message || "An unexpected error occurred.",
+        loading: false,
+      }));
     }
-  }, [beds, baths, size, lat, lng, featureWeights]);
+  }, [state.inputs]);
 
   useEffect(() => {
-    if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+    if (lat !== null && lng !== null) {
       fetchProperties();
     } else {
-      setError("Invalid or missing location data.");
-      setLoading(false);
+      setState((prev) => ({
+        ...prev,
+        error: "Invalid or missing location data.",
+        loading: false,
+      }));
     }
-  }, [lat, lng, beds, baths, size, fetchProperties]);
+  }, [lat, lng, fetchProperties]);
 
-  if (loading) {
+  if (state.loading) {
     return <div className="text-center">Loading properties...</div>;
   }
 
-  if (error) {
-    return <div className="text-red-500 text-center">Error: {error}</div>;
+  if (state.error) {
+    return <div className="text-red-500 text-center">Error: {state.error}</div>;
   }
 
   return (
     <div className="container mx-auto px-4 py-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Top-Left Module: House Details */}
+        {/* House Details */}
         <div className="bg-gray-100 p-6 rounded-lg shadow-md">
           <h2 className="text-lg font-semibold mb-4">House Details</h2>
           {address ? (
@@ -325,9 +214,10 @@ function ResultComponent() {
               <p>
                 <strong>Address:</strong> {address}
               </p>
-              {/* Inputs for Beds, Baths, Size */}
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
+              {/* Inputs and Recalculate Button on the same line */}
+              <div className="mt-4 flex flex-wrap items-end space-x-4">
+                {/* Beds Input */}
+                <div className="flex flex-col">
                   <label
                     htmlFor="beds"
                     className="block text-xs font-medium text-gray-600"
@@ -338,15 +228,16 @@ function ResultComponent() {
                     type="number"
                     id="beds"
                     name="beds"
-                    min="1"
-                    max="10"
-                    step="1"
-                    value={beds}
-                    onChange={handleBedsChange}
-                    className="mt-1 block w-full p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
+                    min={1}
+                    max={10}
+                    step={1}
+                    value={filterInputs.beds}
+                    onChange={handleChange("beds")}
+                    className="mt-1 w-20 p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
-                <div>
+                {/* Baths Input */}
+                <div className="flex flex-col">
                   <label
                     htmlFor="baths"
                     className="block text-xs font-medium text-gray-600"
@@ -357,15 +248,16 @@ function ResultComponent() {
                     type="number"
                     id="baths"
                     name="baths"
-                    min="1"
-                    max="10"
-                    step="1"
-                    value={baths}
-                    onChange={handleBathsChange}
-                    className="mt-1 block w-full p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
+                    min={1}
+                    max={10}
+                    step={1}
+                    value={filterInputs.baths}
+                    onChange={handleChange("baths")}
+                    className="mt-1 w-20 p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
-                <div>
+                {/* Size Input */}
+                <div className="flex flex-col">
                   <label
                     htmlFor="size"
                     className="block text-xs font-medium text-gray-600"
@@ -376,13 +268,23 @@ function ResultComponent() {
                     type="number"
                     id="size"
                     name="size"
-                    min="10"
-                    max="500"
-                    step="10"
-                    value={size}
-                    onChange={handleSizeChange}
-                    className="mt-1 block w-full p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
+                    min={10}
+                    max={1000} // Increased max to accommodate Very Large properties
+                    step={10}
+                    value={filterInputs.size}
+                    onChange={handleChange("size")}
+                    className="mt-1 w-24 p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
                   />
+                </div>
+                {/* Recalculate Button */}
+                <div className="mt-6 sm:mt-0">
+                  <button
+                    onClick={handleRecalculate}
+                    className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    disabled={state.loading}
+                  >
+                    Recalculate
+                  </button>
                 </div>
               </div>
             </div>
@@ -391,19 +293,19 @@ function ResultComponent() {
           )}
         </div>
 
-        {/* Top-Right Module: Price Estimate */}
+        {/* Price Estimate */}
         <div className="bg-gray-100 p-6 rounded-lg shadow-md">
           <h2 className="text-lg font-semibold mb-4">Price Estimate</h2>
-          {medianPrice !== null ? (
+          {state.medianPrice !== null ? (
             <>
               <p className="text-2xl font-bold text-green-500">
-                €{medianPrice.toLocaleString()}
+                €{state.medianPrice.toLocaleString()}
               </p>
-              {confidenceBands.lowerQuartile !== null &&
-                confidenceBands.upperQuartile !== null && (
+              {state.confidenceBands.lowerQuartile !== null &&
+                state.confidenceBands.upperQuartile !== null && (
                   <p className="text-sm text-gray-500 mt-2">
-                    50% confidence range: €{confidenceBands.lowerQuartile.toLocaleString()} - €
-                    {confidenceBands.upperQuartile.toLocaleString()}
+                    50% confidence range: €{state.confidenceBands.lowerQuartile.toLocaleString()} - €
+                    {state.confidenceBands.upperQuartile.toLocaleString()}
                   </p>
                 )}
             </>
@@ -417,8 +319,8 @@ function ResultComponent() {
       <div className="mt-8">
         <h2 className="text-xl font-semibold mb-4">Recently Sold Nearby</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {properties.length > 0 ? (
-            properties.map((property, index) => (
+          {state.properties.length ? (
+            state.properties.map((property, index) => (
               <div key={index} className="border p-4 rounded-lg shadow-md bg-white">
                 <p className="font-semibold text-blue-600 hover:underline">
                   {property.myhome_link ? (
@@ -435,10 +337,7 @@ function ResultComponent() {
                   )}
                 </p>
                 <p className="text-sm text-gray-500 mt-1">
-                  Distance from your location:{" "}
-                  {property.geoDistance !== undefined && !isNaN(property.geoDistance)
-                    ? `${property.geoDistance.toFixed(2)} km`
-                    : "N/A"}
+                  Distance from your location: {property.distance?.toFixed(2) || "N/A"} km
                 </p>
                 <div className="flex justify-between mt-3">
                   <div>
@@ -469,16 +368,20 @@ function ResultComponent() {
                 </div>
                 <div className="grid grid-cols-2 gap-2 mt-3 text-sm text-gray-700">
                   <p>
-                    <strong>Beds:</strong> {property.beds}
+                    <strong>Beds:</strong> {property.beds} Bed{property.beds > 1 ? "s" : ""}
                   </p>
                   <p>
-                    <strong>Baths:</strong> {property.baths}
+                    <strong>Baths:</strong> {property.baths} Bath{property.baths > 1 ? "s" : ""}
                   </p>
                   <p>
                     <strong>BER:</strong> {property.energy_rating || "N/A"}
                   </p>
                   <p>
                     <strong>Size:</strong> {property.myhome_floor_area_value} m²
+                  </p>
+                  {/* Display Property Category */}
+                  <p>
+                    <strong>Category:</strong> {property.category || "N/A"}
                   </p>
                 </div>
               </div>
