@@ -1,11 +1,12 @@
-'use client';
+"use client";
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation'; // Next.js routing
 import Script from 'next/script'; // Next.js Script component
 import { FaChevronDown } from 'react-icons/fa'; // ChevronDown icon from Font Awesome
+import Modal from '../components/Modal';
 
-// Header Component
+// Header Component (unchanged)
 const Header = () => {
   return (
     <header className="bg-white shadow-sm">
@@ -22,12 +23,15 @@ const Header = () => {
   );
 };
 
-// PropertyValuationHero Component with Google Places Autocomplete
+// PropertyValuationHero Component with Google Places Autocomplete and Modal
 const PropertyValuationHero = () => {
   const [address, setAddress] = useState('');
   const autocompleteRef = useRef(null);
   const inputRef = useRef(null);
   const router = useRouter();
+
+  // State for Modal
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Geocode the selected address to validate its location (Optional - Server-Side Validation)
   const geocodeAddress = async (address) => {
@@ -57,69 +61,104 @@ const PropertyValuationHero = () => {
     }
   };
 
-// Handle form submission
-const handleSubmit = async (e) => {
-  // Check if the event object exists (when called manually it won't exist)
-  if (e) {
-    e.preventDefault(); // Prevent default form submission behavior if the event exists
-  }
-
-  if (address.trim() === '') {
-    // Do nothing if no address is entered
-    return;
-  }
-
-  const geocodedResult = await geocodeAddress(address); // Optional server-side validation
-
-  if (!geocodedResult) {
-    // Do nothing if the address is invalid
-    return;
-  }
-
-  // Proceed if valid
-  const params = new URLSearchParams({
-    lat: geocodedResult.geometry.location.lat,
-    lng: geocodedResult.geometry.location.lng,
-    address: geocodedResult.formatted_address,
-  });
-
-  // Navigate to the results page
-  router.push(`/result?${params.toString()}`);
-};
-
-
-// Handle place selection
-const handlePlaceChange = () => {
-  const place = autocompleteRef.current.getPlace();
-
-  if (place.geometry) {
-    // Validate that the place is in Ireland
-    const countryComponent = place.address_components.find((component) =>
-      component.types.includes('country')
-    );
-
-    if (countryComponent && countryComponent.short_name === 'IE') {
-      // Set the address and submit the form without showing alerts
-      setAddress(place.formatted_address);
-      handleSubmit();
+  // Handle form submission
+  const handleSubmit = async (e) => {
+    // Check if the event object exists (when called manually it won't exist)
+    if (e) {
+      e.preventDefault(); // Prevent default form submission behavior if the event exists
     }
-  }
-};
 
-// Initialize Autocomplete after Google Maps script loads
-const handleScriptLoad = () => {
-  if (window.google) {
-    const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
-      types: ['address'], // Restrict to addresses
-      componentRestrictions: { country: 'ie' }, // Restrict results to Ireland
-      fields: ['address_components', 'formatted_address', 'geometry'],
+    if (address.trim() === '') {
+      // Do nothing if no address is entered
+      return;
+    }
+
+    const geocodedResult = await geocodeAddress(address); // Optional server-side validation
+
+    if (!geocodedResult) {
+      // Do nothing if the address is invalid
+      alert("Please enter a valid address in Ireland.");
+      return;
+    }
+
+    // Proceed by opening the modal to collect beds, baths, and size
+    setIsModalOpen(true);
+  };
+
+  // Handle place selection from Google Autocomplete
+  const handlePlaceChange = () => {
+    const place = autocompleteRef.current.getPlace();
+
+    if (place.geometry) {
+      // Validate that the place is in Ireland
+      const countryComponent = place.address_components.find((component) =>
+        component.types.includes('country')
+      );
+
+      if (countryComponent && countryComponent.short_name === 'IE') {
+        // Set the address and submit the form to open the modal
+        setAddress(place.formatted_address);
+        handleSubmit();
+      } else {
+        alert("Please select an address located in Ireland.");
+      }
+    }
+  };
+
+  // Initialize Autocomplete after Google Maps script loads
+  const handleScriptLoad = () => {
+    if (window.google) {
+      const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
+        types: ['address'], // Restrict to addresses
+        componentRestrictions: { country: 'ie' }, // Restrict results to Ireland
+        fields: ['address_components', 'formatted_address', 'geometry'],
+      });
+
+      autocomplete.addListener('place_changed', handlePlaceChange);
+
+      autocompleteRef.current = autocomplete;
+    }
+  };
+
+  // Handle Modal Submission
+  const handleModalSubmit = ({ beds, baths, size }) => {
+    // Prepare query parameters
+    const params = new URLSearchParams({
+      lat: geocodeAddressCache?.geometry.location.lat || '', // Optional: Cache geocoded result
+      lng: geocodeAddressCache?.geometry.location.lng || '',
+      address: geocodeAddressCache?.formatted_address || '',
+      beds: beds,
+      baths: baths,
+      size: size,
     });
 
-    autocomplete.addListener('place_changed', handlePlaceChange);
+    // Navigate to the results page with all parameters
+    router.push(`/result?${params.toString()}`);
+  };
 
-    autocompleteRef.current = autocomplete;
-  }
-};
+  // Cache geocoded result to use in modal submission
+  const [geocodeAddressCache, setGeocodeAddressCache] = useState(null);
+
+  // Update handleSubmit to cache geocoded result
+  const handleSubmitWithCache = async (e) => {
+    if (e) {
+      e.preventDefault();
+    }
+
+    if (address.trim() === '') {
+      return;
+    }
+
+    const geocodedResult = await geocodeAddress(address);
+
+    if (!geocodedResult) {
+      alert("Please enter a valid address in Ireland.");
+      return;
+    }
+
+    setGeocodeAddressCache(geocodedResult);
+    setIsModalOpen(true);
+  };
 
   return (
     <>
@@ -127,6 +166,13 @@ const handleScriptLoad = () => {
         src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places&region=IE`}
         strategy="afterInteractive"
         onLoad={handleScriptLoad}
+      />
+
+      {/* Modal Component */}
+      <Modal
+        isModalOpen={isModalOpen}
+        setIsModalOpen={setIsModalOpen}
+        onSubmit={handleModalSubmit}
       />
 
       <div
@@ -140,7 +186,7 @@ const handleScriptLoad = () => {
           <h1 className="text-3xl font-bold mb-2 text-white">How Much Is My Home Worth?</h1>
           <p className="text-md mb-6 text-gray-200">Enter your address to get an instant estimate.</p>
           <form
-            onSubmit={handleSubmit}
+            onSubmit={handleSubmitWithCache}
             className="flex flex-col items-center sm:flex-row sm:justify-center sm:space-x-4 space-y-4 sm:space-y-0 max-w-2xl mx-auto w-full"
           >
             <div className="w-full sm:w-3/4 lg:w-2/3">
@@ -169,7 +215,7 @@ const handleScriptLoad = () => {
   );
 };
 
-// FAQ Component (fixed with FaChevronDown import)
+// FAQ Component (unchanged)
 const FAQ = () => {
   const faqs = [
     {
@@ -236,7 +282,7 @@ const FAQ = () => {
   );
 };
 
-// Footer Component with Smaller and Responsive Font
+// Footer Component (unchanged)
 const Footer = () => {
   return (
     <footer className="bg-gray-100 text-gray-600 py-6">
