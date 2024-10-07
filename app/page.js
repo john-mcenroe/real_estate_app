@@ -33,77 +33,9 @@ const PropertyValuationHero = () => {
   // State for Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Geocode the selected address to validate its location (Optional - Server-Side Validation)
-  const geocodeAddress = async (address) => {
-    try {
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
-      );
-      const data = await response.json();
-
-      if (data.results.length === 0) {
-        return null;
-      }
-
-      // Check if the result is from Ireland (IE)
-      const countryComponent = data.results[0].address_components.find((component) =>
-        component.types.includes('country')
-      );
-
-      if (countryComponent && countryComponent.short_name === 'IE') {
-        return data.results[0];
-      } else {
-        return null; // Address is not in Ireland
-      }
-    } catch (error) {
-      console.error('Error fetching geolocation data:', error.message);
-      return null;
-    }
-  };
-
-  // Handle form submission
-  const handleSubmit = async (e) => {
-    // Check if the event object exists (when called manually it won't exist)
-    if (e) {
-      e.preventDefault(); // Prevent default form submission behavior if the event exists
-    }
-
-    if (address.trim() === '') {
-      // Do nothing if no address is entered
-      return;
-    }
-
-    const geocodedResult = await geocodeAddress(address); // Optional server-side validation
-
-    if (!geocodedResult) {
-      // Do nothing if the address is invalid
-      alert("Please enter a valid address in Ireland.");
-      return;
-    }
-
-    // Proceed by opening the modal to collect beds, baths, and size
-    setIsModalOpen(true);
-  };
-
-  // Handle place selection from Google Autocomplete
-  const handlePlaceChange = () => {
-    const place = autocompleteRef.current.getPlace();
-
-    if (place.geometry) {
-      // Validate that the place is in Ireland
-      const countryComponent = place.address_components.find((component) =>
-        component.types.includes('country')
-      );
-
-      if (countryComponent && countryComponent.short_name === 'IE') {
-        // Set the address and submit the form to open the modal
-        setAddress(place.formatted_address);
-        handleSubmit();
-      } else {
-        alert("Please select an address located in Ireland.");
-      }
-    }
-  };
+  // Cache geocoded result to use in modal submission
+  // Standardized to always have lat and lng as numbers
+  const [geocodeAddressCache, setGeocodeAddressCache] = useState(null);
 
   // Initialize Autocomplete after Google Maps script loads
   const handleScriptLoad = () => {
@@ -120,13 +52,181 @@ const PropertyValuationHero = () => {
     }
   };
 
+  // Geocode the selected address to validate its location (Optional - Server-Side Validation)
+  const geocodeAddress = async (address) => {
+    try {
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
+      );
+      const data = await response.json();
+
+      if (data.status !== 'OK' || data.results.length === 0) {
+        return null;
+      }
+
+      // Check if the result is from Ireland (IE)
+      const countryComponent = data.results[0].address_components.find((component) =>
+        component.types.includes('country')
+      );
+
+      if (countryComponent && countryComponent.short_name === 'IE') {
+        // **Normalization:** Extract lat and lng as numbers
+        return {
+          lat: data.results[0].geometry.location.lat,
+          lng: data.results[0].geometry.location.lng,
+          formatted_address: data.results[0].formatted_address,
+        };
+      } else {
+        return null; // Address is not in Ireland
+      }
+    } catch (error) {
+      console.error('Error fetching geolocation data:', error.message);
+      return null;
+    }
+  };
+
+  // Handle place selection from Google Autocomplete
+  const handlePlaceChange = () => {
+    const place = autocompleteRef.current.getPlace();
+
+    if (place.geometry) {
+      // Validate that the place is in Ireland
+      const countryComponent = place.address_components.find((component) =>
+        component.types.includes('country')
+      );
+
+      if (countryComponent && countryComponent.short_name === 'IE') {
+        // **Normalization:** Extract lat and lng as numbers
+        const normalizedGeocode = {
+          lat: place.geometry.location.lat(),
+          lng: place.geometry.location.lng(),
+          formatted_address: place.formatted_address,
+        };
+
+        // Set the address and cache the normalized geocoded result
+        setAddress(place.formatted_address);
+        setGeocodeAddressCache(normalizedGeocode);
+        setIsModalOpen(true);
+      } else {
+        alert("Please select an address located in Ireland.");
+      }
+    } else {
+      alert("Please select a valid address from the suggestions.");
+    }
+  };
+
+  // Function to get top autocomplete prediction
+  const getTopPrediction = async (input) => {
+    return new Promise((resolve, reject) => {
+      if (!window.google) {
+        reject(new Error('Google Maps script not loaded'));
+      }
+
+      const autocompleteService = new window.google.maps.places.AutocompleteService();
+      autocompleteService.getPlacePredictions(
+        {
+          input: input,
+          types: ['address'],
+          componentRestrictions: { country: 'ie' },
+        },
+        (predictions, status) => {
+          if (status !== window.google.maps.places.PlacesServiceStatus.OK || !predictions || predictions.length === 0) {
+            reject(new Error('No predictions found'));
+          } else {
+            resolve(predictions[0]);
+          }
+        }
+      );
+    });
+  };
+
+  // Function to get place details from place_id
+  const getPlaceDetails = async (placeId) => {
+    return new Promise((resolve, reject) => {
+      const placesService = new window.google.maps.places.PlacesService(document.createElement('div'));
+      placesService.getDetails(
+        {
+          placeId: placeId,
+          fields: ['address_components', 'formatted_address', 'geometry'],
+        },
+        (place, status) => {
+          if (status !== window.google.maps.places.PlacesServiceStatus.OK || !place) {
+            reject(new Error('Failed to get place details'));
+          } else {
+            resolve(place);
+          }
+        }
+      );
+    });
+  };
+
+  // Handle form submission with caching and top prediction selection
+  const handleSubmitWithCache = async (e) => {
+    if (e) {
+      e.preventDefault();
+    }
+
+    if (address.trim() === '') {
+      alert("Please enter an address.");
+      return;
+    }
+
+    // Attempt to geocode the entered address
+    const geocodedResult = await geocodeAddress(address);
+
+    if (geocodedResult) {
+      // Valid address, cache the result and open the modal
+      setGeocodeAddressCache(geocodedResult);
+      setIsModalOpen(true);
+      return;
+    }
+
+    // If geocoding fails, attempt to get the top prediction
+    try {
+      const topPrediction = await getTopPrediction(address);
+      const placeDetails = await getPlaceDetails(topPrediction.place_id);
+
+      // **Normalization:** Extract lat and lng as numbers
+      const normalizedGeocode = {
+        lat: placeDetails.geometry.location.lat(),
+        lng: placeDetails.geometry.location.lng(),
+        formatted_address: placeDetails.formatted_address,
+      };
+
+      // Geocode the top prediction's formatted address
+      const geocodedTop = await geocodeAddress(placeDetails.formatted_address);
+
+      if (geocodedTop) {
+        // Update the address state with the top prediction and cache the normalized geocoded result
+        setAddress(placeDetails.formatted_address);
+        setGeocodeAddressCache({
+          lat: geocodedTop.lat,
+          lng: geocodedTop.lng,
+          formatted_address: geocodedTop.formatted_address,
+        });
+        setIsModalOpen(true);
+      } else {
+        // If still invalid, show error
+        alert("Please enter a valid address in Ireland.");
+      }
+    } catch (error) {
+      console.error('Error selecting top prediction:', error.message);
+      alert("Please enter a valid address in Ireland.");
+    }
+  };
+
   // Handle Modal Submission
   const handleModalSubmit = ({ beds, baths, size }) => {
-    // Prepare query parameters
+    if (!geocodeAddressCache) {
+      alert("Geocoded address information is missing.");
+      return;
+    }
+
+    // Prepare query parameters using standardized lat and lng
     const params = new URLSearchParams({
-      lat: geocodeAddressCache?.geometry.location.lat || '', // Optional: Cache geocoded result
-      lng: geocodeAddressCache?.geometry.location.lng || '',
-      address: geocodeAddressCache?.formatted_address || '',
+      lat: geocodeAddressCache.lat, // Now always a number
+      lng: geocodeAddressCache.lng, // Now always a number
+      address: geocodeAddressCache.formatted_address,
       beds: beds,
       baths: baths,
       size: size,
@@ -134,30 +234,6 @@ const PropertyValuationHero = () => {
 
     // Navigate to the results page with all parameters
     router.push(`/result?${params.toString()}`);
-  };
-
-  // Cache geocoded result to use in modal submission
-  const [geocodeAddressCache, setGeocodeAddressCache] = useState(null);
-
-  // Update handleSubmit to cache geocoded result
-  const handleSubmitWithCache = async (e) => {
-    if (e) {
-      e.preventDefault();
-    }
-
-    if (address.trim() === '') {
-      return;
-    }
-
-    const geocodedResult = await geocodeAddress(address);
-
-    if (!geocodedResult) {
-      alert("Please enter a valid address in Ireland.");
-      return;
-    }
-
-    setGeocodeAddressCache(geocodedResult);
-    setIsModalOpen(true);
   };
 
   return (
@@ -200,6 +276,13 @@ const PropertyValuationHero = () => {
                 ref={inputRef}
                 aria-label="Property Address"
                 autoComplete="off"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    // Prevent the default Enter behavior to allow custom handling
+                    e.preventDefault();
+                    handleSubmitWithCache();
+                  }
+                }}
               />
             </div>
             <button
