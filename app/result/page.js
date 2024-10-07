@@ -366,12 +366,15 @@ function ResultComponent() {
                     </p>
                   </div>
                 </div>
+                {/* Updated Property Details */}
                 <div className="grid grid-cols-2 gap-2 mt-3 text-sm text-gray-700">
+                  {/* Beds */}
                   <p>
-                    <strong>Beds:</strong> {property.beds} Bed{property.beds > 1 ? "s" : ""}
+                    <strong>Beds:</strong> {property.beds}
                   </p>
+                  {/* Baths */}
                   <p>
-                    <strong>Baths:</strong> {property.baths} Bath{property.baths > 1 ? "s" : ""}
+                    <strong>Baths:</strong> {property.baths}
                   </p>
                   <p>
                     <strong>BER:</strong> {property.energy_rating || "N/A"}
@@ -379,10 +382,10 @@ function ResultComponent() {
                   <p>
                     <strong>Size:</strong> {property.myhome_floor_area_value} m²
                   </p>
-                  {/* Display Property Category */}
-                  <p>
+                  {/* Removed Category */}
+                  {/* <p>
                     <strong>Category:</strong> {property.category || "N/A"}
-                  </p>
+                  </p> */}
                 </div>
               </div>
             ))
