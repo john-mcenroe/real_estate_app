@@ -1,6 +1,8 @@
+// results.js
+
 "use client";
 
-import { Suspense, useState, useEffect, useCallback } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { supabase } from "../../libs/supabaseClient";
 import {
@@ -9,40 +11,40 @@ import {
   calculateConfidenceBands,
   getPropertyCategory,
   calculateSimilarity,
+  calculateCombinedScore,
+  estimatePropertyValueWeightedAverage,
+  preparePropertiesForValuation,
 } from "../utils"; // Adjust the path as necessary
 
 function ResultComponent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
+  // Extract initial parameters from URL
   const latParam = parseFloat(searchParams.get("lat"));
   const lngParam = parseFloat(searchParams.get("lng"));
 
-  // Main state holding applied filters and results
-  const [state, setState] = useState({
-    properties: [],
-    loading: true,
-    medianPrice: null,
-    confidenceBands: null,
-    error: null,
-    inputs: {
-      lat: isNaN(latParam) ? null : latParam,
-      lng: isNaN(lngParam) ? null : lngParam,
-      address: searchParams.get("address") || "",
-      beds: parseInt(searchParams.get("beds"), 10) || 1,
-      baths: parseInt(searchParams.get("baths"), 10) || 1,
-      size: parseInt(searchParams.get("size"), 10) || 30,
-    },
+  // Initialize state with inputs from URL or defaults
+  const [inputs, setInputs] = useState({
+    lat: isNaN(latParam) ? null : latParam,
+    lng: isNaN(lngParam) ? null : lngParam,
+    address: searchParams.get("address") || "",
+    beds: parseInt(searchParams.get("beds"), 10) || 1,
+    baths: parseInt(searchParams.get("baths"), 10) || 1,
+    size: parseInt(searchParams.get("size"), 10) || 30,
   });
 
-  // Separate state for filter inputs
+  // Separate state for filter form inputs
   const [filterInputs, setFilterInputs] = useState({
-    beds: state.inputs.beds,
-    baths: state.inputs.baths,
-    size: state.inputs.size,
+    beds: inputs.beds,
+    baths: inputs.baths,
+    size: inputs.size,
   });
 
-  const { beds, baths, size, lat, lng, address } = state.inputs;
+  // State for sorting option
+  const [sortOption, setSortOption] = useState("combinedScore"); // Default sort by Combined Score
+
+  const { beds, baths, size, lat, lng, address } = inputs;
 
   const TOP_N = 30;
 
@@ -60,140 +62,170 @@ function ResultComponent() {
       params.set("address", newInputs.address);
     }
 
-    router.push(`?${params.toString()}`);
+    // Use replace to avoid adding to browser history unnecessarily
+    router.replace(`?${params.toString()}`);
   };
 
   // Handle input changes for filterInputs
   const handleChange = (field) => (e) => {
     const value = parseInt(e.target.value, 10);
-    setFilterInputs((prev) => ({ ...prev, [field]: value }));
+    setFilterInputs((prev) => ({ ...prev, [field]: isNaN(value) ? "" : value }));
   };
 
   // Handle "Recalculate" button click
   const handleRecalculate = () => {
     const newInputs = {
-      ...state.inputs,
+      ...inputs,
       beds: filterInputs.beds,
       baths: filterInputs.baths,
       size: filterInputs.size,
     };
-    setState((prev) => ({ ...prev, inputs: newInputs }));
+    setInputs(newInputs);
     updateURL(newInputs);
   };
 
-  const fetchProperties = useCallback(async () => {
-    setState((prev) => ({ ...prev, loading: true, error: null }));
-    try {
-      const { data, error } = await supabase
-        .from("scraped_property_data_v1")
-        .select(`
-          *,
-          latitude,
-          longitude,
-          sale_date,
-          sale_price,
-          myhome_link,
-          asking_price,
-          first_list_date,
-          beds,
-          baths,
-          myhome_floor_area_value,
-          energy_rating,
-          address
-        `);
+  // Handle sorting option change
+  const handleSortChange = (e) => {
+    setSortOption(e.target.value);
+  };
 
-      if (error) throw new Error(error.message);
-      if (!Array.isArray(data)) throw new Error("Invalid data format.");
-
-      console.log("Fetched data:", data);
-
-      const filtered = data.filter(
-        (p) =>
-          p.latitude &&
-          p.longitude &&
-          !isNaN(parseFloat(p.latitude)) &&
-          !isNaN(parseFloat(p.longitude)) &&
-          p.myhome_floor_area_value != null &&
-          !isNaN(parseFloat(p.myhome_floor_area_value)) &&
-          p.beds != null &&
-          !isNaN(parseInt(p.beds, 10)) &&
-          p.baths != null &&
-          !isNaN(parseInt(p.baths, 10))
-      );
-
-      console.log("Filtered properties:", filtered);
-
-      if (!filtered.length) {
-        setState((prev) => ({
-          ...prev,
-          properties: [],
-          medianPrice: null,
-          confidenceBands: null,
-          loading: false,
-        }));
-        return;
-      }
-
-      // Calculate similarity scores
-      const propertiesWithSimilarity = filtered
-        .map((property) => calculateSimilarity(property, state.inputs))
-        .filter((p) => p.categoryScore > 0) // Ensure at least one category matches
-        .sort((a, b) => {
-          // Higher categoryScore is better; if equal, closer distance is better
-          if (b.categoryScore !== a.categoryScore) {
-            return b.categoryScore - a.categoryScore;
-          }
-          return a.distance - b.distance;
-        })
-        .slice(0, TOP_N);
-
-      console.log("Properties with similarity:", propertiesWithSimilarity);
-
-      if (!propertiesWithSimilarity.length) {
-        setState((prev) => ({
-          ...prev,
-          properties: [],
-          medianPrice: null,
-          confidenceBands: null,
-          loading: false,
-        }));
-        return;
-      }
-
-      const topPrices = propertiesWithSimilarity
-        .map((p) => parseFloat(p.sale_price))
-        .filter((price) => !isNaN(price) && price > 0);
-
-      setState((prev) => ({
-        ...prev,
-        properties: propertiesWithSimilarity,
-        medianPrice: topPrices.length ? calculateMedian(topPrices) : null,
-        confidenceBands: topPrices.length
-          ? calculateConfidenceBands(topPrices)
-          : { lowerQuartile: null, upperQuartile: null },
-        loading: false,
-      }));
-    } catch (err) {
-      console.error("Error fetching properties:", err);
-      setState((prev) => ({
-        ...prev,
-        error: err.message || "An unexpected error occurred.",
-        loading: false,
-      }));
-    }
-  }, [state.inputs]);
-
+  // Fetch properties based on current inputs
   useEffect(() => {
-    if (lat !== null && lng !== null) {
-      fetchProperties();
-    } else {
-      setState((prev) => ({
-        ...prev,
-        error: "Invalid or missing location data.",
-        loading: false,
-      }));
-    }
-  }, [lat, lng, fetchProperties]);
+    const fetchProperties = async () => {
+      // If location data is invalid, set error
+      if (lat === null || lng === null) {
+        setState({
+          properties: [],
+          loading: false,
+          medianPrice: null,
+          confidenceBands: null,
+          weightedPrice: null,
+          error: "Invalid or missing location data.",
+        });
+        return;
+      }
+
+      // Initialize loading state
+      setState((prev) => ({ ...prev, loading: true, error: null }));
+
+      try {
+        const { data, error } = await supabase
+          .from("scraped_property_data_v1")
+          .select(`
+            *,
+            latitude,
+            longitude,
+            sale_date,
+            sale_price,
+            myhome_link,
+            asking_price,
+            first_list_date,
+            beds,
+            baths,
+            myhome_floor_area_value,
+            energy_rating,
+            address
+          `);
+
+        if (error) throw new Error(error.message);
+        if (!Array.isArray(data)) throw new Error("Invalid data format.");
+
+        console.log("Fetched data:", data);
+
+        const filtered = data.filter(
+          (p) =>
+            p.latitude &&
+            p.longitude &&
+            !isNaN(parseFloat(p.latitude)) &&
+            !isNaN(parseFloat(p.longitude)) &&
+            p.myhome_floor_area_value != null &&
+            !isNaN(parseFloat(p.myhome_floor_area_value)) &&
+            p.beds != null &&
+            !isNaN(parseInt(p.beds, 10)) &&
+            p.baths != null &&
+            !isNaN(parseInt(p.baths, 10))
+        );
+
+        console.log("Filtered properties:", filtered);
+
+        if (!filtered.length) {
+          setState({
+            properties: [],
+            loading: false,
+            medianPrice: null,
+            confidenceBands: null,
+            weightedPrice: null,
+            error: null,
+          });
+          return;
+        }
+
+        // Use the utility function to prepare properties for valuation
+        const preparedProperties = preparePropertiesForValuation(filtered, inputs, {
+          geoWeight: 0.7,
+          maxDistanceKm: 3,
+          decayRate: 1.0,
+        });
+
+        const topProperties = preparedProperties.slice(0, TOP_N);
+
+        console.log("Prepared and sorted properties:", topProperties);
+
+        if (!topProperties.length) {
+          setState({
+            properties: [],
+            loading: false,
+            medianPrice: null,
+            confidenceBands: null,
+            weightedPrice: null,
+            error: null,
+          });
+          return;
+        }
+
+        // Calculate median and confidence bands
+        const topPrices = topProperties
+          .map((p) => parseFloat(p.sale_price))
+          .filter((price) => !isNaN(price) && price > 0);
+
+        // Calculate weighted valuation
+        const weightedValue = estimatePropertyValueWeightedAverage(topProperties, TOP_N);
+
+        setState({
+          properties: topProperties,
+          loading: false,
+          medianPrice: topPrices.length ? calculateMedian(topPrices) : null,
+          confidenceBands: topPrices.length
+            ? calculateConfidenceBands(topPrices)
+            : { lowerQuartile: null, upperQuartile: null },
+          weightedPrice: weightedValue,
+          error: null,
+        });
+      } catch (err) {
+        console.error("Error fetching properties:", err);
+        setState({
+          properties: [],
+          loading: false,
+          medianPrice: null,
+          confidenceBands: null,
+          weightedPrice: null,
+          error: err.message || "An unexpected error occurred.",
+        });
+      }
+    };
+
+    fetchProperties();
+  }, [inputs, lat, lng]);
+
+  // State to hold fetched properties and related data
+  const [state, setState] = useState({
+    properties: [],
+    loading: true,
+    medianPrice: null,
+    confidenceBands: null,
+    weightedPrice: null,
+    error: null,
+  });
 
   if (state.loading) {
     return <div className="text-center">Loading properties...</div>;
@@ -202,6 +234,16 @@ function ResultComponent() {
   if (state.error) {
     return <div className="text-red-500 text-center">Error: {state.error}</div>;
   }
+
+  // Function to sort properties based on sortOption
+  const sortedProperties = [...state.properties].sort((a, b) => {
+    if (sortOption === "distance") {
+      return a.distance - b.distance; // Ascending order
+    } else if (sortOption === "combinedScore") {
+      return b.combinedScore - a.combinedScore; // Descending order
+    }
+    return 0; // Default no sorting
+  });
 
   return (
     <div className="container mx-auto px-4 py-6">
@@ -269,7 +311,7 @@ function ResultComponent() {
                     id="size"
                     name="size"
                     min={10}
-                    max={1000} // Increased max to accommodate Very Large properties
+                    max={1000} // Increased max to accommodate very large properties
                     step={10}
                     value={filterInputs.size}
                     onChange={handleChange("size")}
@@ -287,6 +329,21 @@ function ResultComponent() {
                   </button>
                 </div>
               </div>
+              {/* Sorting Options */}
+              <div className="mt-6">
+                <label htmlFor="sort" className="block text-xs font-medium text-gray-600 mb-1">
+                  Sort By:
+                </label>
+                <select
+                  id="sort"
+                  value={sortOption}
+                  onChange={handleSortChange}
+                  className="w-full md:w-48 p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="combinedScore">Combined Score (High to Low)</option>
+                  <option value="distance">Distance (Low to High)</option>
+                </select>
+              </div>
             </div>
           ) : (
             <p className="text-gray-700">No location data available.</p>
@@ -296,11 +353,18 @@ function ResultComponent() {
         {/* Price Estimate */}
         <div className="bg-gray-100 p-6 rounded-lg shadow-md">
           <h2 className="text-lg font-semibold mb-4">Price Estimate</h2>
-          {state.medianPrice !== null ? (
+          {state.medianPrice !== null || state.weightedPrice !== null ? (
             <>
-              <p className="text-2xl font-bold text-green-500">
-                €{state.medianPrice.toLocaleString()}
-              </p>
+              {state.medianPrice !== null && (
+                <p className="text-2xl font-bold text-green-500">
+                  Median Price: €{state.medianPrice.toLocaleString()}
+                </p>
+              )}
+              {state.weightedPrice !== null && (
+                <p className="text-2xl font-bold text-blue-500 mt-2">
+                  Weighted Valuation: €{state.weightedPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              )}
               {state.confidenceBands.lowerQuartile !== null &&
                 state.confidenceBands.upperQuartile !== null && (
                   <p className="text-sm text-gray-500 mt-2">
@@ -319,8 +383,8 @@ function ResultComponent() {
       <div className="mt-8">
         <h2 className="text-xl font-semibold mb-4">Recently Sold Nearby</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {state.properties.length ? (
-            state.properties.map((property, index) => (
+          {sortedProperties.length ? (
+            sortedProperties.map((property, index) => (
               <div key={index} className="border p-4 rounded-lg shadow-md bg-white">
                 <p className="font-semibold text-blue-600 hover:underline">
                   {property.myhome_link ? (
@@ -338,6 +402,10 @@ function ResultComponent() {
                 </p>
                 <p className="text-sm text-gray-500 mt-1">
                   Distance from your location: {property.distance?.toFixed(2) || "N/A"} km
+                </p>
+                {/* Display Combined Score */}
+                <p className="text-sm text-gray-500 mt-1">
+                  <strong>Combined Score:</strong> {property.combinedScore.toFixed(2)}
                 </p>
                 <div className="flex justify-between mt-3">
                   <div>
