@@ -1,5 +1,12 @@
+import sys
 import json
-import math
+import logging
+import os
+import traceback
+
+logging.basicConfig(level=logging.DEBUG, filename='generate_columns.log', filemode='w')
+
+DEBUG = os.environ.get('DEBUG_MODE') == 'true'
 
 def calculate_property_age(year_built):
     current_year = 2023  # You might want to dynamically calculate this
@@ -12,17 +19,18 @@ def calculate_log_price(price):
     return math.log(price) if price > 0 else None
 
 def get_property_type_category(property_type):
-    apartment_keywords = ['apartment', 'flat', 'studio']
-    house_keywords = ['house', 'bungalow', 'cottage', 'villa']
-    
-    if any(keyword in property_type.lower() for keyword in apartment_keywords):
+    if property_type.lower() in ['apartment', 'flat', 'studio']:
         return 'Apartment'
-    elif any(keyword in property_type.lower() for keyword in house_keywords):
+    elif property_type.lower() in ['house', 'bungalow', 'cottage', 'villa']:
         return 'House'
     else:
         return 'Other'
 
 def get_bed_category(beds):
+    try:
+        beds = int(beds)
+    except ValueError:
+        return "Unknown"
     if beds <= 1:
         return "Studio/1 Bed"
     elif beds <= 2:
@@ -33,6 +41,10 @@ def get_bed_category(beds):
         return "4+ Bed"
 
 def get_bath_category(baths):
+    try:
+        baths = int(baths)
+    except ValueError:
+        return "Unknown"
     if baths <= 1:
         return "1 Bath"
     elif baths <= 2:
@@ -41,6 +53,10 @@ def get_bath_category(baths):
         return "3+ Bath"
 
 def get_size_category(size):
+    try:
+        size = float(size)
+    except ValueError:
+        return "Unknown"
     if size < 50:
         return "Very Small"
     elif size < 90:
@@ -70,70 +86,39 @@ def get_ber_category(ber_rating):
     else:
         return 'Unknown'
 
-def handler(request):
-    if request.method == 'OPTIONS':
-        # Handle CORS preflight request
-        return {
-            'statusCode': 200,
-            'headers': {
-                'Access-Control-Allow-Origin': '*',  # Adjust this for production
-                'Access-Control-Allow-Methods': 'POST, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type',
-            },
-            'body': ''
+def generate_columns(data):
+    try:
+        result = {
+            'bedCategory': get_bed_category(data.get('beds', 0)),
+            'bathCategory': get_bath_category(data.get('baths', 0)),
+            'sizeCategory': get_size_category(data.get('size', 0)),
+            'propertyTypeCategory': get_property_type_category(data.get('property_type', '')),
+            'berCategory': get_ber_category(data.get('ber_rating', '')),
+            'originalInputs': data  # Include original inputs for debugging
         }
+        logging.debug(f"Generated result: {result}")
+        return result
+    except Exception as e:
+        logging.error(f"Error in generate_columns: {str(e)}")
+        return {"error": str(e)}
 
-    if request.method == 'POST':
-        try:
-            body = request.json
-
-            # Extract inputs with default values if not provided
-            beds = int(body.get('beds', 1))
-            baths = int(body.get('baths', 1))
-            size = float(body.get('size', 30))
-            year_built = int(body.get('year_built')) if body.get('year_built') not in (None, '') else None
-            price = float(body.get('price', 0))
-            property_type = body.get('property_type', '')
-            ber_rating = body.get('ber_rating', '')
-
-            # Calculate additional columns
-            result = {
-                **body,
-                'bedCategory': get_bed_category(beds),
-                'bathCategory': get_bath_category(baths),
-                'sizeCategory': get_size_category(size),
-                'propertyAge': calculate_property_age(year_built),
-                'pricePerSqm': calculate_price_per_sqm(price, size),
-                'logPrice': calculate_log_price(price),
-                'propertyTypeCategory': get_property_type_category(property_type),
-                'berCategory': get_ber_category(ber_rating)
-            }
-
-            return {
-                'statusCode': 200,
-                'headers': {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'  # Adjust this for production
-                },
-                'body': json.dumps(result)
-            }
-
-        except Exception as e:
-            return {
-                'statusCode': 500,
-                'headers': {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'  # Adjust this for production
-                },
-                'body': json.dumps({'error': str(e)})
-            }
-
-    # If not POST or OPTIONS, return 405 Method Not Allowed
-    return {
-        'statusCode': 405,
-        'headers': {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'  # Adjust this for production
-        },
-        'body': json.dumps({'error': 'Method Not Allowed'})
-    }
+if __name__ == "__main__":
+    try:
+        logging.debug(f"Script started with arguments: {sys.argv}")
+        if len(sys.argv) > 1:
+            input_json = sys.argv[1]
+        else:
+            input_json = sys.stdin.read()
+        
+        logging.debug(f"Received input: {input_json}")
+        input_data = json.loads(input_json)
+        
+        result = generate_columns(input_data)
+        print(json.dumps(result))
+    except json.JSONDecodeError as e:
+        logging.error(f"JSON decode error: {str(e)}")
+        print(json.dumps({"error": "Invalid JSON input", "details": str(e)}))
+    except Exception as e:
+        logging.error(f"Error in main: {str(e)}")
+        logging.error(f"Traceback: {traceback.format_exc()}")
+        print(json.dumps({"error": str(e), "traceback": traceback.format_exc()}))

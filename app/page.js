@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation'; // Next.js routing
 import Script from 'next/script'; // Next.js Script component
 import { FaChevronDown } from 'react-icons/fa'; // ChevronDown icon from Font Awesome
-import Modal from '../components/Modal';
+import Modal from '../components/Modal'; // Ensure this path is correct
 
 // Header Component (unchanged)
 const Header = () => {
@@ -26,6 +26,13 @@ const Header = () => {
 // PropertyValuationHero Component with Google Places Autocomplete and Modal
 const PropertyValuationHero = () => {
   const [address, setAddress] = useState('');
+  const [inputs, setInputs] = useState({
+    beds: '',
+    baths: '',
+    size: '',
+    property_type: '',
+    ber_rating: ''
+  }); // **Initialized inputs state**
   const autocompleteRef = useRef(null);
   const inputRef = useRef(null);
   const router = useRouter();
@@ -175,60 +182,98 @@ const PropertyValuationHero = () => {
     const geocodedResult = await geocodeAddress(address);
 
     if (geocodedResult) {
-      // Valid address, cache the result and open the modal
       setGeocodeAddressCache(geocodedResult);
-      setIsModalOpen(true);
-      return;
-    }
 
-    // If geocoding fails, attempt to get the top prediction
-    try {
-      const topPrediction = await getTopPrediction(address);
-      const placeDetails = await getPlaceDetails(topPrediction.place_id);
+      const params = new URLSearchParams({
+        lat: geocodedResult.lat.toString(),
+        lng: geocodedResult.lng.toString(),
+        address: geocodedResult.formatted_address,
+        ...inputs
+      });
 
-      // **Normalization:** Extract lat and lng as numbers
-      const normalizedGeocode = {
-        lat: placeDetails.geometry.location.lat(),
-        lng: placeDetails.geometry.location.lng(),
-        formatted_address: placeDetails.formatted_address,
-      };
+      console.log("Navigating to:", `/result?${params.toString()}`); // **Debugging Log**
+      router.push(`/result?${params.toString()}`);
+    } else {
+      // If geocoding fails, attempt to get the top prediction
+      try {
+        const topPrediction = await getTopPrediction(address);
+        const placeDetails = await getPlaceDetails(topPrediction.place_id);
 
-      // Geocode the top prediction's formatted address
-      const geocodedTop = await geocodeAddress(placeDetails.formatted_address);
+        // **Normalization:** Extract lat and lng as numbers
+        const normalizedGeocode = {
+          lat: placeDetails.geometry.location.lat(),
+          lng: placeDetails.geometry.location.lng(),
+          formatted_address: placeDetails.formatted_address,
+        };
 
-      if (geocodedTop) {
-        // Update the address state with the top prediction and cache the normalized geocoded result
-        setAddress(placeDetails.formatted_address);
-        setGeocodeAddressCache({
-          lat: geocodedTop.lat,
-          lng: geocodedTop.lng,
-          formatted_address: geocodedTop.formatted_address,
-        });
-        setIsModalOpen(true);
-      } else {
-        // If still invalid, show error
+        // Geocode the top prediction's formatted address
+        const geocodedTop = await geocodeAddress(placeDetails.formatted_address);
+
+        if (geocodedTop) {
+          // Update the address state with the top prediction and cache the normalized geocoded result
+          setAddress(placeDetails.formatted_address);
+          setGeocodeAddressCache({
+            lat: geocodedTop.lat,
+            lng: geocodedTop.lng,
+            formatted_address: geocodedTop.formatted_address,
+          });
+          setIsModalOpen(true);
+        } else {
+          // If still invalid, show error
+          alert("Please enter a valid address in Ireland.");
+        }
+      } catch (error) {
+        console.error('Error selecting top prediction:', error.message);
         alert("Please enter a valid address in Ireland.");
       }
-    } catch (error) {
-      console.error('Error selecting top prediction:', error.message);
-      alert("Please enter a valid address in Ireland.");
     }
   };
 
   // Handle Modal Submission
-  const handleModalSubmit = (inputs) => {
+  const handleModalSubmit = (modalInputs) => {
+    setInputs(modalInputs);
+    handleSubmitWithCache();
+  };
+
+  // Ensure inputs are correctly set
+  const handleChange = (field) => (e) => {
+    const value = field === 'property_type' ? e.target.value : parseFloat(e.target.value) || '';
+    setInputs((prev) => ({ ...prev, [field]: value }));
+  };
+
+  // Recalculate button click (if applicable)
+  const handleRecalculate = () => {
+    const newInputs = {
+      ...inputs, // **Use inputs instead of state.inputs**
+      beds: inputs.beds,
+      baths: inputs.baths,
+      size: inputs.size,
+      property_type: inputs.property_type,
+      ber_rating: inputs.ber_rating,
+    };
+    setInputs(newInputs); // **Update inputs state**
+    updateURL(newInputs);
+  };
+
+  // Function to update URL based on new inputs
+  const updateURL = (newInputs) => {
     if (!geocodeAddressCache) {
       alert("Geocoded address information is missing.");
       return;
     }
 
     const params = new URLSearchParams({
-      lat: geocodeAddressCache.lat,
-      lng: geocodeAddressCache.lng,
+      lat: geocodeAddressCache.lat.toString(),
+      lng: geocodeAddressCache.lng.toString(),
       address: geocodeAddressCache.formatted_address,
-      ...inputs
+      beds: newInputs.beds.toString(),
+      baths: newInputs.baths.toString(),
+      size: newInputs.size.toString(),
+      property_type: newInputs.property_type,
+      ber_rating: newInputs.ber_rating,
     });
 
+    console.log("Updating URL to:", `/result?${params.toString()}`); // **Debugging Log**
     router.push(`/result?${params.toString()}`);
   };
 
@@ -245,6 +290,8 @@ const PropertyValuationHero = () => {
         isModalOpen={isModalOpen}
         setIsModalOpen={setIsModalOpen}
         onSubmit={handleModalSubmit}
+        inputs={inputs}
+        handleChange={handleChange}
       />
 
       <div

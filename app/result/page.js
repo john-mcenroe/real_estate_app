@@ -18,39 +18,64 @@ function ResultComponent() {
   const latParam = parseFloat(searchParams.get("lat"));
   const lngParam = parseFloat(searchParams.get("lng"));
 
-  // Main state holding applied filters and results
+  console.log("Received lat:", latParam, "lng:", lngParam); // **Debugging Log**
+
+  // Separate state for inputs and filters
+  const [inputs, setInputs] = useState({
+    lat: isNaN(latParam) ? null : latParam,
+    lng: isNaN(lngParam) ? null : lngParam,
+    address: searchParams.get("address") || "",
+  });
+
+  const [filterInputs, setFilterInputs] = useState({
+    beds: parseInt(searchParams.get("beds"), 10) || 1,
+    baths: parseInt(searchParams.get("baths"), 10) || 1,
+    size: parseInt(searchParams.get("size"), 10) || 30,
+    property_type: searchParams.get("property_type") || "",
+    ber_rating: searchParams.get("ber_rating") || "",
+  });
+
   const [state, setState] = useState({
     properties: [],
     loading: true,
     medianPrice: null,
     confidenceBands: null,
     error: null,
-    inputs: {
-      lat: isNaN(latParam) ? null : latParam,
-      lng: isNaN(lngParam) ? null : lngParam,
-      address: searchParams.get("address") || "",
-      beds: parseInt(searchParams.get("beds"), 10) || 1,
-      baths: parseInt(searchParams.get("baths"), 10) || 1,
-      size: parseInt(searchParams.get("size"), 10) || 30,
-      year_built: parseInt(searchParams.get("year_built"), 10) || null,
-      price: parseFloat(searchParams.get("price")) || 0,
-      property_type: searchParams.get("property_type") || "",
-    },
   });
 
-  // Separate state for filter inputs
-  const [filterInputs, setFilterInputs] = useState({
-    beds: state.inputs.beds,
-    baths: state.inputs.baths,
-    size: state.inputs.size,
-    year_built: state.inputs.year_built,
-    price: state.inputs.price,
-    property_type: state.inputs.property_type,
-  });
-
-  const { beds, baths, size, year_built, price, property_type, lat, lng, address } = state.inputs;
+  const { beds, baths, size, property_type, ber_rating } = filterInputs;
+  const { lat, lng, address } = inputs;
 
   const TOP_N = 30;
+
+  // New state to hold the generated columns
+  const [generatedColumns, setGeneratedColumns] = useState(null);
+
+  // Handle input changes for filterInputs
+  const handleChange = (field) => (e) => {
+    const value =
+      field === "property_type" || field === "ber_rating"
+        ? e.target.value
+        : e.target.value === ""
+        ? ""
+        : parseFloat(e.target.value) || 0;
+    setFilterInputs((prev) => ({ ...prev, [field]: value }));
+  };
+
+  // Handle "Recalculate" button click
+  const handleRecalculate = (e) => {
+    e.preventDefault(); // Prevent default form submission
+    const newInputs = {
+      ...inputs,
+      beds: filterInputs.beds,
+      baths: filterInputs.baths,
+      size: filterInputs.size,
+      property_type: filterInputs.property_type,
+      ber_rating: filterInputs.ber_rating,
+    };
+    setInputs(newInputs);
+    updateURL(newInputs);
+  };
 
   // Function to update the URL based on applied filters
   const updateURL = (newInputs) => {
@@ -60,46 +85,33 @@ function ResultComponent() {
       beds: newInputs.beds.toString(),
       baths: newInputs.baths.toString(),
       size: newInputs.size.toString(),
-      year_built: newInputs.year_built ? newInputs.year_built.toString() : '',
-      price: newInputs.price.toString(),
       property_type: newInputs.property_type,
+      ber_rating: newInputs.ber_rating,
     });
 
     if (newInputs.address) {
       params.set("address", newInputs.address);
     }
 
+    console.log("Updating URL to:", `?${params.toString()}`); // **Debugging Log**
     router.push(`?${params.toString()}`);
-  };
-
-  // Handle input changes for filterInputs
-  const handleChange = (field) => (e) => {
-    const value = field === 'property_type' ? e.target.value : e.target.value === '' ? '' : parseFloat(e.target.value) || 0;
-    setFilterInputs((prev) => ({ ...prev, [field]: value }));
-  };
-
-  // Handle "Recalculate" button click
-  const handleRecalculate = () => {
-    const newInputs = {
-      ...state.inputs,
-      beds: filterInputs.beds,
-      baths: filterInputs.baths,
-      size: filterInputs.size,
-      year_built: filterInputs.year_built,
-      price: filterInputs.price,
-      property_type: filterInputs.property_type,
-    };
-    setState((prev) => ({ ...prev, inputs: newInputs }));
-    updateURL(newInputs);
   };
 
   const fetchProperties = useCallback(async () => {
     setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
-      const { data, error } = await supabase
-        .from("scraped_property_data_v1")
+      // Ensure lat and lng are available
+      if (!lat || !lng) {
+        throw new Error("Latitude and longitude are required");
+      }
+
+      console.log("Fetching properties with inputs:", { ...inputs, ...filterInputs }); // **Debugging Log**
+
+      // Fetch properties from the new table
+      const { data: properties, error } = await supabase
+        .from("scraped_property_data_v1") // Updated table name
         .select(`
-          *,
+          id,
           latitude,
           longitude,
           sale_date,
@@ -112,14 +124,17 @@ function ResultComponent() {
           myhome_floor_area_value,
           energy_rating,
           address
-        `);
+        `)
+        .order("sale_date", { ascending: false });
 
-      if (error) throw new Error(error.message);
-      if (!Array.isArray(data)) throw new Error("Invalid data format.");
+      if (error) {
+        console.error("Supabase Error:", error);
+        throw new Error(error.message || "Failed to fetch properties from Supabase.");
+      }
 
-      console.log("Fetched data:", data);
+      console.log("Fetched data:", properties);
 
-      const filtered = data.filter(
+      const filtered = properties.filter(
         (p) =>
           p.latitude &&
           p.longitude &&
@@ -146,20 +161,42 @@ function ResultComponent() {
         return;
       }
 
+      console.log("Data being sent to generate_columns:", {
+        beds,
+        baths,
+        size,
+        property_type,
+        ber_rating,
+      });
+
       // Call the serverless function to generate additional columns
-      const response = await fetch('/api/generate_columns', {
-        method: 'POST',
+      const response = await fetch("/api/generate_columns", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify(state.inputs),
+        body: JSON.stringify({
+          beds: filterInputs.beds,
+          baths: filterInputs.baths,
+          size: filterInputs.size,
+          property_type: filterInputs.property_type,
+          ber_rating: filterInputs.ber_rating,
+        }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to generate additional columns');
+        const errorData = await response.json();
+        console.error("Error response from generate_columns:", errorData);
+        throw new Error(
+          `Failed to generate additional columns: ${errorData.message || JSON.stringify(errorData)}`
+        );
       }
 
-      const inputPropertyWithAdditionalColumns = await response.json();
+      const generatedColumnsData = await response.json();
+      setGeneratedColumns(generatedColumnsData);
+
+      // Assuming generatedColumnsData contains necessary additional data
+      const inputPropertyWithAdditionalColumns = generatedColumnsData;
 
       // Calculate similarity scores
       const propertiesWithSimilarity = filtered
@@ -208,10 +245,10 @@ function ResultComponent() {
         loading: false,
       }));
     }
-  }, [state.inputs]);
+  }, [inputs.lat, inputs.lng, filterInputs]);
 
   useEffect(() => {
-    if (lat !== null && lng !== null) {
+    if (inputs.lat !== null && inputs.lng !== null) {
       fetchProperties();
     } else {
       setState((prev) => ({
@@ -220,7 +257,7 @@ function ResultComponent() {
         loading: false,
       }));
     }
-  }, [lat, lng, fetchProperties]);
+  }, [inputs.lat, inputs.lng, fetchProperties]);
 
   if (state.loading) {
     return <div className="text-center">Loading properties...</div>;
@@ -232,178 +269,157 @@ function ResultComponent() {
 
   return (
     <div className="container mx-auto px-4 py-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* House Details */}
-        <div className="bg-gray-100 p-6 rounded-lg shadow-md">
-          <h2 className="text-lg font-semibold mb-4">House Details</h2>
-          {address ? (
-            <div>
-              <p>
-                <strong>Address:</strong> {address}
-              </p>
-              {/* Inputs and Recalculate Button on the same line */}
-              <div className="mt-4 flex flex-wrap items-end space-x-4">
-                {/* Beds Input */}
-                <div className="flex flex-col">
-                  <label
-                    htmlFor="beds"
-                    className="block text-xs font-medium text-gray-600"
-                  >
-                    Beds
-                  </label>
-                  <input
-                    type="number"
-                    id="beds"
-                    name="beds"
-                    min={1}
-                    max={10}
-                    step={1}
-                    value={filterInputs.beds}
-                    onChange={handleChange("beds")}
-                    className="mt-1 w-20 p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                {/* Baths Input */}
-                <div className="flex flex-col">
-                  <label
-                    htmlFor="baths"
-                    className="block text-xs font-medium text-gray-600"
-                  >
-                    Baths
-                  </label>
-                  <input
-                    type="number"
-                    id="baths"
-                    name="baths"
-                    min={1}
-                    max={10}
-                    step={1}
-                    value={filterInputs.baths}
-                    onChange={handleChange("baths")}
-                    className="mt-1 w-20 p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                {/* Size Input */}
-                <div className="flex flex-col">
-                  <label
-                    htmlFor="size"
-                    className="block text-xs font-medium text-gray-600"
-                  >
-                    Size (m²)
-                  </label>
-                  <input
-                    type="number"
-                    id="size"
-                    name="size"
-                    min={10}
-                    max={1000} // Increased max to accommodate Very Large properties
-                    step={10}
-                    value={filterInputs.size}
-                    onChange={handleChange("size")}
-                    className="mt-1 w-24 p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                {/* Year Built Input */}
-                <div className="flex flex-col">
-                  <label
-                    htmlFor="year_built"
-                    className="block text-xs font-medium text-gray-600"
-                  >
-                    Year Built
-                  </label>
-                  <input
-                    type="number"
-                    id="year_built"
-                    name="year_built"
-                    min={1900}
-                    max={2023}
-                    step={1}
-                    value={filterInputs.year_built || ''}
-                    onChange={handleChange("year_built")}
-                    className="mt-1 w-24 p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                {/* Price Input */}
-                <div className="flex flex-col">
-                  <label
-                    htmlFor="price"
-                    className="block text-xs font-medium text-gray-600"
-                  >
-                    Price (€)
-                  </label>
-                  <input
-                    type="number"
-                    id="price"
-                    name="price"
-                    min={0}
-                    step={1000}
-                    value={filterInputs.price || ''}
-                    onChange={handleChange("price")}
-                    className="mt-1 w-32 p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                {/* Property Type Input */}
-                <div className="flex flex-col">
-                  <label
-                    htmlFor="property_type"
-                    className="block text-xs font-medium text-gray-600"
-                  >
-                    Property Type
-                  </label>
-                  <select
-                    id="property_type"
-                    name="property_type"
-                    value={filterInputs.property_type}
-                    onChange={handleChange("property_type")}
-                    className="mt-1 w-32 p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">Select Type</option>
-                    <option value="Apartment">Apartment</option>
-                    <option value="House">House</option>
-                    <option value="Bungalow">Bungalow</option>
-                    <option value="Studio">Studio</option>
-                    <option value="Villa">Villa</option>
-                    {/* Add more options as needed */}
-                  </select>
-                </div>
-                {/* Recalculate Button */}
-                <div className="mt-6 sm:mt-0">
-                  <button
-                    onClick={handleRecalculate}
-                    className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                    disabled={state.loading}
-                  >
-                    Recalculate
-                  </button>
+      <form onSubmit={handleRecalculate}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* House Details */}
+          <div className="bg-gray-100 p-6 rounded-lg shadow-md">
+            <h2 className="text-lg font-semibold mb-4">House Details</h2>
+            {address ? (
+              <div>
+                <p>
+                  <strong>Address:</strong> {address}
+                </p>
+                <div className="mt-4 flex flex-wrap items-end space-x-4">
+                  {/* Beds Input */}
+                  <div className="flex flex-col">
+                    <label htmlFor="beds" className="block text-xs font-medium text-gray-600">
+                      Beds
+                    </label>
+                    <input
+                      type="number"
+                      id="beds"
+                      name="beds"
+                      min={1}
+                      max={10}
+                      step={1}
+                      value={filterInputs.beds}
+                      onChange={handleChange("beds")}
+                      className="mt-1 w-20 p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  {/* Baths Input */}
+                  <div className="flex flex-col">
+                    <label htmlFor="baths" className="block text-xs font-medium text-gray-600">
+                      Baths
+                    </label>
+                    <input
+                      type="number"
+                      id="baths"
+                      name="baths"
+                      min={1}
+                      max={10}
+                      step={1}
+                      value={filterInputs.baths}
+                      onChange={handleChange("baths")}
+                      className="mt-1 w-20 p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  {/* Size Input */}
+                  <div className="flex flex-col">
+                    <label htmlFor="size" className="block text-xs font-medium text-gray-600">
+                      Size (m²)
+                    </label>
+                    <input
+                      type="number"
+                      id="size"
+                      name="size"
+                      min={10}
+                      max={1000}
+                      step={10}
+                      value={filterInputs.size}
+                      onChange={handleChange("size")}
+                      className="mt-1 w-24 p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  {/* Property Type Input */}
+                  <div className="flex flex-col">
+                    <label htmlFor="property_type" className="block text-xs font-medium text-gray-600">
+                      Property Type
+                    </label>
+                    <select
+                      id="property_type"
+                      name="property_type"
+                      value={filterInputs.property_type}
+                      onChange={handleChange("property_type")}
+                      className="mt-1 w-32 p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">Select Type</option>
+                      <option value="Apartment">Apartment</option>
+                      <option value="House">House</option>
+                      <option value="Bungalow">Bungalow</option>
+                      <option value="Studio">Studio</option>
+                      <option value="Villa">Villa</option>
+                    </select>
+                  </div>
+                  {/* BER Rating Dropdown */}
+                  <div className="flex flex-col">
+                    <label htmlFor="ber_rating" className="block text-xs font-medium text-gray-600">
+                      BER Rating
+                    </label>
+                    <select
+                      id="ber_rating"
+                      name="ber_rating"
+                      value={filterInputs.ber_rating}
+                      onChange={handleChange("ber_rating")}
+                      className="mt-1 w-20 p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">Select Rating</option>
+                      <option value="A1">A1</option>
+                      <option value="A2">A2</option>
+                      <option value="A3">A3</option>
+                      <option value="B1">B1</option>
+                      <option value="B2">B2</option>
+                      <option value="B3">B3</option>
+                      <option value="C1">C1</option>
+                      <option value="C2">C2</option>
+                      <option value="C3">C3</option>
+                      <option value="D1">D1</option>
+                      <option value="D2">D2</option>
+                      <option value="E1">E1</option>
+                      <option value="E2">E2</option>
+                      <option value="F">F</option>
+                      <option value="G">G</option>
+                    </select>
+                  </div>
+                  {/* Recalculate Button */}
+                  <div className="mt-6 sm:mt-0">
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      disabled={state.loading}
+                    >
+                      Recalculate
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : (
-            <p className="text-gray-700">No location data available.</p>
-          )}
-        </div>
+            ) : (
+              <p className="text-gray-700">No location data available.</p>
+            )}
+          </div>
 
-        {/* Price Estimate */}
-        <div className="bg-gray-100 p-6 rounded-lg shadow-md">
-          <h2 className="text-lg font-semibold mb-4">Price Estimate</h2>
-          {state.medianPrice !== null ? (
-            <>
-              <p className="text-2xl font-bold text-green-500">
-                €{state.medianPrice.toLocaleString()}
-              </p>
-              {state.confidenceBands.lowerQuartile !== null &&
-                state.confidenceBands.upperQuartile !== null && (
-                  <p className="text-sm text-gray-500 mt-2">
-                    50% confidence range: €{state.confidenceBands.lowerQuartile.toLocaleString()} - €
-                    {state.confidenceBands.upperQuartile.toLocaleString()}
-                  </p>
-                )}
-            </>
-          ) : (
-            <p className="text-gray-700">No valuation data available.</p>
-          )}
+          {/* Price Estimate */}
+          <div className="bg-gray-100 p-6 rounded-lg shadow-md">
+            <h2 className="text-lg font-semibold mb-4">Price Estimate</h2>
+            {state.medianPrice !== null ? (
+              <>
+                <p className="text-2xl font-bold text-green-500">
+                  €{state.medianPrice.toLocaleString()}
+                </p>
+                {state.confidenceBands.lowerQuartile !== null &&
+                  state.confidenceBands.upperQuartile !== null && (
+                    <p className="text-sm text-gray-500 mt-2">
+                      50% confidence range: €{state.confidenceBands.lowerQuartile.toLocaleString()} - €
+                      {state.confidenceBands.upperQuartile.toLocaleString()}
+                    </p>
+                  )}
+              </>
+            ) : (
+              <p className="text-gray-700">No valuation data available.</p>
+            )}
+          </div>
         </div>
-      </div>
+      </form>
 
       {/* Results Section */}
       <div className="mt-8">
@@ -472,10 +488,6 @@ function ResultComponent() {
                   <p>
                     <strong>Size:</strong> {property.myhome_floor_area_value} m²
                   </p>
-                  {/* Removed Category */}
-                  {/* <p>
-                    <strong>Category:</strong> {property.category || "N/A"}
-                  </p> */}
                 </div>
               </div>
             ))
@@ -484,6 +496,16 @@ function ResultComponent() {
           )}
         </div>
       </div>
+
+      {/* Display Generated Columns */}
+      {generatedColumns && (
+        <div className="mt-8 bg-white p-6 rounded-lg shadow-md">
+          <h2 className="text-xl font-semibold mb-4">Generated Columns</h2>
+          <pre className="bg-gray-100 p-4 rounded overflow-x-auto">
+            {JSON.stringify(generatedColumns, null, 2)}
+          </pre>
+        </div>
+      )}
     </div>
   );
 }

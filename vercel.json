@@ -1,1 +1,7 @@
- 
+{
+  "functions": {
+    "api/generate_columns.py": {
+      "runtime": "python3.9"
+    }
+  }
+}

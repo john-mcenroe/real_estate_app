@@ -1,53 +1,71 @@
 // src/components/Modal.js
+
 "use client";
 
 import { Dialog, Transition } from "@headlessui/react";
-import { Fragment, useState } from "react";
+import { Fragment, useState, useEffect } from "react";
 import PropTypes from "prop-types";
+import { useRouter } from "next/navigation";
 
 const Modal = ({ isModalOpen, setIsModalOpen, onSubmit }) => {
-  const [inputs, setInputs] = useState({
-    beds: "",
-    baths: "",
-    size: "",
-    property_type: "",
-    ber_rating: ""
-  });
+  const router = useRouter();
+  const searchParams = new URLSearchParams(window.location.search);
 
-  const DEFAULT_BEDS = 3;
-  const DEFAULT_BATHS = 2;
-  const DEFAULT_SIZE = 120;
+  const [inputs, setInputs] = useState({
+    beds: searchParams.get("beds") || "",
+    baths: searchParams.get("baths") || "",
+    size: searchParams.get("size") || "",
+    property_type: searchParams.get("property_type") || "",
+    ber_rating: searchParams.get("ber_rating") || "",
+  });
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setInputs(prev => ({
+    setInputs((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
   const handleFormSubmit = (e) => {
     e.preventDefault();
-
-    const finalInputs = {
-      beds: inputs.beds ? parseInt(inputs.beds) : DEFAULT_BEDS,
-      baths: inputs.baths ? parseInt(inputs.baths) : DEFAULT_BATHS,
-      size: inputs.size ? parseFloat(inputs.size) : DEFAULT_SIZE,
-      property_type: inputs.property_type,
-      ber_rating: inputs.ber_rating
-    };
-
-    onSubmit(finalInputs);
+    console.log("Modal Inputs:", inputs); // **Debugging Log**
+    onSubmit(inputs);
     setIsModalOpen(false);
+
+    // Update URL search params
+    const params = new URLSearchParams({
+      ...Object.fromEntries(searchParams.entries()),
+      beds: inputs.beds,
+      baths: inputs.baths,
+      size: inputs.size,
+      property_type: inputs.property_type,
+      ber_rating: inputs.ber_rating,
+    });
+
+    if (inputs.beds === "") params.delete("beds");
+    if (inputs.baths === "") params.delete("baths");
+    if (inputs.size === "") params.delete("size");
+    if (inputs.property_type === "") params.delete("property_type");
+    if (inputs.ber_rating === "") params.delete("ber_rating");
+
+    router.push(`?${params.toString()}`);
   };
+
+  // To ensure that when the modal opens, it reflects the current URL params
+  useEffect(() => {
+    setInputs({
+      beds: searchParams.get("beds") || "",
+      baths: searchParams.get("baths") || "",
+      size: searchParams.get("size") || "",
+      property_type: searchParams.get("property_type") || "",
+      ber_rating: searchParams.get("ber_rating") || "",
+    });
+  }, [isModalOpen]);
 
   return (
     <Transition appear show={isModalOpen} as={Fragment}>
-      <Dialog
-        as="div"
-        className="relative z-50"
-        onClose={() => setIsModalOpen(false)}
-      >
+      <Dialog as="div" className="relative z-50" onClose={() => setIsModalOpen(false)}>
         <Transition.Child
           as={Fragment}
           enter="ease-out duration-300"
@@ -59,7 +77,6 @@ const Modal = ({ isModalOpen, setIsModalOpen, onSubmit }) => {
         >
           <div className="fixed inset-0 bg-neutral-focus bg-opacity-50" />
         </Transition.Child>
-
         <div className="fixed inset-0 overflow-y-auto">
           <div className="flex min-h-full overflow-hidden items-center justify-center p-2">
             <Transition.Child
@@ -73,85 +90,76 @@ const Modal = ({ isModalOpen, setIsModalOpen, onSubmit }) => {
             >
               <Dialog.Panel className="relative w-full max-w-md transform text-left align-middle shadow-xl transition-all rounded-xl bg-white p-6">
                 <div className="flex justify-between items-center mb-4">
-                  <Dialog.Title as="h2" className="text-lg font-semibold">
-                    Enter Property Details
-                  </Dialog.Title>
+                  <Dialog.Title as="h2" className="text-lg font-semibold">Enter Property Details</Dialog.Title>
                   <button
                     className="text-gray-500 hover:text-gray-700 focus:outline-none"
                     onClick={() => setIsModalOpen(false)}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-                      <path fillRule="evenodd" d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" clipRule="evenodd" />
+                      <path
+                        fillRule="evenodd"
+                        d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
+                        clipRule="evenodd"
+                      />
                     </svg>
                   </button>
                 </div>
-
                 <form onSubmit={handleFormSubmit} className="space-y-4">
                   {/* Beds Input */}
                   <div>
-                    <label htmlFor="beds" className="block text-sm font-medium text-gray-700">
-                      Number of Beds
-                    </label>
+                    <label htmlFor="beds" className="block text-sm font-medium text-gray-700">Number of Beds</label>
                     <input
                       type="number"
                       id="beds"
                       name="beds"
                       min="1"
                       step="1"
-                      placeholder={`Default: ${DEFAULT_BEDS}`}
                       value={inputs.beds}
                       onChange={handleChange}
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      required
                     />
                   </div>
-
                   {/* Baths Input */}
                   <div>
-                    <label htmlFor="baths" className="block text-sm font-medium text-gray-700">
-                      Number of Baths
-                    </label>
+                    <label htmlFor="baths" className="block text-sm font-medium text-gray-700">Number of Baths</label>
                     <input
                       type="number"
                       id="baths"
                       name="baths"
                       min="1"
                       step="1"
-                      placeholder={`Default: ${DEFAULT_BATHS}`}
                       value={inputs.baths}
                       onChange={handleChange}
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      required
                     />
                   </div>
-
                   {/* Size Input */}
                   <div>
-                    <label htmlFor="size" className="block text-sm font-medium text-gray-700">
-                      Size (m²)
-                    </label>
+                    <label htmlFor="size" className="block text-sm font-medium text-gray-700">Size (m²)</label>
                     <input
                       type="number"
                       id="size"
                       name="size"
                       min="1"
                       step="0.1"
-                      placeholder={`Default: ${DEFAULT_SIZE} m²`}
                       value={inputs.size}
                       onChange={handleChange}
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      required
                     />
                   </div>
-
                   {/* Property Type Input */}
                   <div>
-                    <label htmlFor="property_type" className="block text-sm font-medium text-gray-700">
-                      Property Type
-                    </label>
+                    <label htmlFor="property_type" className="block text-sm font-medium text-gray-700">Property Type</label>
                     <select
                       id="property_type"
                       name="property_type"
                       value={inputs.property_type}
                       onChange={handleChange}
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      required
                     >
                       <option value="">Select property type</option>
                       <option value="house">House</option>
@@ -161,18 +169,16 @@ const Modal = ({ isModalOpen, setIsModalOpen, onSubmit }) => {
                       <option value="villa">Villa</option>
                     </select>
                   </div>
-
                   {/* BER Rating Input */}
                   <div>
-                    <label htmlFor="ber_rating" className="block text-sm font-medium text-gray-700">
-                      BER Rating
-                    </label>
+                    <label htmlFor="ber_rating" className="block text-sm font-medium text-gray-700">BER Rating</label>
                     <select
                       id="ber_rating"
                       name="ber_rating"
                       value={inputs.ber_rating}
                       onChange={handleChange}
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      required
                     >
                       <option value="">Select BER rating</option>
                       <option value="A1">A1</option>
@@ -192,7 +198,6 @@ const Modal = ({ isModalOpen, setIsModalOpen, onSubmit }) => {
                       <option value="G">G</option>
                     </select>
                   </div>
-
                   {/* Submit Button */}
                   <div className="mt-6">
                     <button
