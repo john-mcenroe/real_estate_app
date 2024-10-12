@@ -216,23 +216,19 @@ const PropertyValuationHero = () => {
   };
 
   // Handle Modal Submission
-  const handleModalSubmit = ({ beds, baths, size }) => {
+  const handleModalSubmit = (inputs) => {
     if (!geocodeAddressCache) {
       alert("Geocoded address information is missing.");
       return;
     }
 
-    // Prepare query parameters using standardized lat and lng
     const params = new URLSearchParams({
-      lat: geocodeAddressCache.lat, // Now always a number
-      lng: geocodeAddressCache.lng, // Now always a number
+      lat: geocodeAddressCache.lat,
+      lng: geocodeAddressCache.lng,
       address: geocodeAddressCache.formatted_address,
-      beds: beds,
-      baths: baths,
-      size: size,
+      ...inputs
     });
 
-    // Navigate to the results page with all parameters
     router.push(`/result?${params.toString()}`);
   };
 

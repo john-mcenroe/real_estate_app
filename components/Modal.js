@@ -3,39 +3,41 @@
 
 import { Dialog, Transition } from "@headlessui/react";
 import { Fragment, useState } from "react";
-import PropTypes from "prop-types"; // Optional: For prop type validation
+import PropTypes from "prop-types";
 
 const Modal = ({ isModalOpen, setIsModalOpen, onSubmit }) => {
-  const [beds, setBeds] = useState("");
-  const [baths, setBaths] = useState("");
-  const [size, setSize] = useState("");
+  const [inputs, setInputs] = useState({
+    beds: "",
+    baths: "",
+    size: "",
+    property_type: "",
+    ber_rating: ""
+  });
 
   const DEFAULT_BEDS = 3;
   const DEFAULT_BATHS = 2;
   const DEFAULT_SIZE = 120;
 
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setInputs(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
   const handleFormSubmit = (e) => {
     e.preventDefault();
 
-    const parsedBeds = parseFloat(beds);
-    const parsedBaths = parseFloat(baths);
-    const parsedSize = parseFloat(size);
+    const finalInputs = {
+      beds: inputs.beds ? parseInt(inputs.beds) : DEFAULT_BEDS,
+      baths: inputs.baths ? parseInt(inputs.baths) : DEFAULT_BATHS,
+      size: inputs.size ? parseFloat(inputs.size) : DEFAULT_SIZE,
+      property_type: inputs.property_type,
+      ber_rating: inputs.ber_rating
+    };
 
-    const finalBeds =
-      !isNaN(parsedBeds) && parsedBeds > 0 ? parsedBeds : DEFAULT_BEDS;
-    const finalBaths =
-      !isNaN(parsedBaths) && parsedBaths > 0 ? parsedBaths : DEFAULT_BATHS;
-    const finalSize =
-      !isNaN(parsedSize) && parsedSize > 0 ? parsedSize : DEFAULT_SIZE;
-
-    // Pass the values back to the parent component
-    onSubmit({
-      beds: finalBeds,
-      baths: finalBaths,
-      size: finalSize,
-    });
-
-    // Close the modal
+    onSubmit(finalInputs);
     setIsModalOpen(false);
   };
 
@@ -78,17 +80,8 @@ const Modal = ({ isModalOpen, setIsModalOpen, onSubmit }) => {
                     className="text-gray-500 hover:text-gray-700 focus:outline-none"
                     onClick={() => setIsModalOpen(false)}
                   >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                      className="w-5 h-5"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
-                        clipRule="evenodd"
-                      />
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                      <path fillRule="evenodd" d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" clipRule="evenodd" />
                     </svg>
                   </button>
                 </div>
@@ -96,10 +89,7 @@ const Modal = ({ isModalOpen, setIsModalOpen, onSubmit }) => {
                 <form onSubmit={handleFormSubmit} className="space-y-4">
                   {/* Beds Input */}
                   <div>
-                    <label
-                      htmlFor="beds"
-                      className="block text-sm font-medium text-gray-700"
-                    >
+                    <label htmlFor="beds" className="block text-sm font-medium text-gray-700">
                       Number of Beds
                     </label>
                     <input
@@ -109,18 +99,15 @@ const Modal = ({ isModalOpen, setIsModalOpen, onSubmit }) => {
                       min="1"
                       step="1"
                       placeholder={`Default: ${DEFAULT_BEDS}`}
-                      value={beds}
-                      onChange={(e) => setBeds(e.target.value)}
+                      value={inputs.beds}
+                      onChange={handleChange}
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
 
                   {/* Baths Input */}
                   <div>
-                    <label
-                      htmlFor="baths"
-                      className="block text-sm font-medium text-gray-700"
-                    >
+                    <label htmlFor="baths" className="block text-sm font-medium text-gray-700">
                       Number of Baths
                     </label>
                     <input
@@ -130,18 +117,15 @@ const Modal = ({ isModalOpen, setIsModalOpen, onSubmit }) => {
                       min="1"
                       step="1"
                       placeholder={`Default: ${DEFAULT_BATHS}`}
-                      value={baths}
-                      onChange={(e) => setBaths(e.target.value)}
+                      value={inputs.baths}
+                      onChange={handleChange}
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
 
                   {/* Size Input */}
                   <div>
-                    <label
-                      htmlFor="size"
-                      className="block text-sm font-medium text-gray-700"
-                    >
+                    <label htmlFor="size" className="block text-sm font-medium text-gray-700">
                       Size (m²)
                     </label>
                     <input
@@ -151,10 +135,62 @@ const Modal = ({ isModalOpen, setIsModalOpen, onSubmit }) => {
                       min="1"
                       step="0.1"
                       placeholder={`Default: ${DEFAULT_SIZE} m²`}
-                      value={size}
-                      onChange={(e) => setSize(e.target.value)}
+                      value={inputs.size}
+                      onChange={handleChange}
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     />
+                  </div>
+
+                  {/* Property Type Input */}
+                  <div>
+                    <label htmlFor="property_type" className="block text-sm font-medium text-gray-700">
+                      Property Type
+                    </label>
+                    <select
+                      id="property_type"
+                      name="property_type"
+                      value={inputs.property_type}
+                      onChange={handleChange}
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">Select property type</option>
+                      <option value="house">House</option>
+                      <option value="apartment">Apartment</option>
+                      <option value="bungalow">Bungalow</option>
+                      <option value="cottage">Cottage</option>
+                      <option value="villa">Villa</option>
+                    </select>
+                  </div>
+
+                  {/* BER Rating Input */}
+                  <div>
+                    <label htmlFor="ber_rating" className="block text-sm font-medium text-gray-700">
+                      BER Rating
+                    </label>
+                    <select
+                      id="ber_rating"
+                      name="ber_rating"
+                      value={inputs.ber_rating}
+                      onChange={handleChange}
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">Select BER rating</option>
+                      <option value="A1">A1</option>
+                      <option value="A2">A2</option>
+                      <option value="A3">A3</option>
+                      <option value="B1">B1</option>
+                      <option value="B2">B2</option>
+                      <option value="B3">B3</option>
+                      <option value="C1">C1</option>
+                      <option value="C2">C2</option>
+                      <option value="C3">C3</option>
+                      <option value="D1">D1</option>
+                      <option value="D2">D2</option>
+                      <option value="E1">E1</option>
+                      <option value="E2">E2</option>
+                      <option value="F">F</option>
+                      <option value="G">G</option>
+                    </select>
                   </div>
 
                   {/* Submit Button */}
@@ -176,7 +212,6 @@ const Modal = ({ isModalOpen, setIsModalOpen, onSubmit }) => {
   );
 };
 
-// Optional: Define prop types for better type checking
 Modal.propTypes = {
   isModalOpen: PropTypes.bool.isRequired,
   setIsModalOpen: PropTypes.func.isRequired,

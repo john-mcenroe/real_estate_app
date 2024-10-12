@@ -32,6 +32,9 @@ function ResultComponent() {
       beds: parseInt(searchParams.get("beds"), 10) || 1,
       baths: parseInt(searchParams.get("baths"), 10) || 1,
       size: parseInt(searchParams.get("size"), 10) || 30,
+      year_built: parseInt(searchParams.get("year_built"), 10) || null,
+      price: parseFloat(searchParams.get("price")) || 0,
+      property_type: searchParams.get("property_type") || "",
     },
   });
 
@@ -40,9 +43,12 @@ function ResultComponent() {
     beds: state.inputs.beds,
     baths: state.inputs.baths,
     size: state.inputs.size,
+    year_built: state.inputs.year_built,
+    price: state.inputs.price,
+    property_type: state.inputs.property_type,
   });
 
-  const { beds, baths, size, lat, lng, address } = state.inputs;
+  const { beds, baths, size, year_built, price, property_type, lat, lng, address } = state.inputs;
 
   const TOP_N = 30;
 
@@ -54,6 +60,9 @@ function ResultComponent() {
       beds: newInputs.beds.toString(),
       baths: newInputs.baths.toString(),
       size: newInputs.size.toString(),
+      year_built: newInputs.year_built ? newInputs.year_built.toString() : '',
+      price: newInputs.price.toString(),
+      property_type: newInputs.property_type,
     });
 
     if (newInputs.address) {
@@ -65,7 +74,7 @@ function ResultComponent() {
 
   // Handle input changes for filterInputs
   const handleChange = (field) => (e) => {
-    const value = parseInt(e.target.value, 10);
+    const value = field === 'property_type' ? e.target.value : e.target.value === '' ? '' : parseFloat(e.target.value) || 0;
     setFilterInputs((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -76,6 +85,9 @@ function ResultComponent() {
       beds: filterInputs.beds,
       baths: filterInputs.baths,
       size: filterInputs.size,
+      year_built: filterInputs.year_built,
+      price: filterInputs.price,
+      property_type: filterInputs.property_type,
     };
     setState((prev) => ({ ...prev, inputs: newInputs }));
     updateURL(newInputs);
@@ -134,10 +146,25 @@ function ResultComponent() {
         return;
       }
 
+      // Call the serverless function to generate additional columns
+      const response = await fetch('/api/generate_columns', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(state.inputs),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate additional columns');
+      }
+
+      const inputPropertyWithAdditionalColumns = await response.json();
+
       // Calculate similarity scores
       const propertiesWithSimilarity = filtered
-        .map((property) => calculateSimilarity(property, state.inputs))
-        .filter((p) => p.categoryScore > 0) // Ensure at least one category matches
+        .map((property) => calculateSimilarity(property, inputPropertyWithAdditionalColumns))
+        .filter((p) => p.categoryScore > 0)
         .sort((a, b) => {
           // Higher categoryScore is better; if equal, closer distance is better
           if (b.categoryScore !== a.categoryScore) {
@@ -275,6 +302,69 @@ function ResultComponent() {
                     onChange={handleChange("size")}
                     className="mt-1 w-24 p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
                   />
+                </div>
+                {/* Year Built Input */}
+                <div className="flex flex-col">
+                  <label
+                    htmlFor="year_built"
+                    className="block text-xs font-medium text-gray-600"
+                  >
+                    Year Built
+                  </label>
+                  <input
+                    type="number"
+                    id="year_built"
+                    name="year_built"
+                    min={1900}
+                    max={2023}
+                    step={1}
+                    value={filterInputs.year_built || ''}
+                    onChange={handleChange("year_built")}
+                    className="mt-1 w-24 p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                {/* Price Input */}
+                <div className="flex flex-col">
+                  <label
+                    htmlFor="price"
+                    className="block text-xs font-medium text-gray-600"
+                  >
+                    Price (€)
+                  </label>
+                  <input
+                    type="number"
+                    id="price"
+                    name="price"
+                    min={0}
+                    step={1000}
+                    value={filterInputs.price || ''}
+                    onChange={handleChange("price")}
+                    className="mt-1 w-32 p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                {/* Property Type Input */}
+                <div className="flex flex-col">
+                  <label
+                    htmlFor="property_type"
+                    className="block text-xs font-medium text-gray-600"
+                  >
+                    Property Type
+                  </label>
+                  <select
+                    id="property_type"
+                    name="property_type"
+                    value={filterInputs.property_type}
+                    onChange={handleChange("property_type")}
+                    className="mt-1 w-32 p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">Select Type</option>
+                    <option value="Apartment">Apartment</option>
+                    <option value="House">House</option>
+                    <option value="Bungalow">Bungalow</option>
+                    <option value="Studio">Studio</option>
+                    <option value="Villa">Villa</option>
+                    {/* Add more options as needed */}
+                  </select>
                 </div>
                 {/* Recalculate Button */}
                 <div className="mt-6 sm:mt-0">
