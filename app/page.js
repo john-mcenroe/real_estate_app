@@ -188,10 +188,10 @@ const PropertyValuationHero = () => {
         lat: geocodedResult.lat.toString(),
         lng: geocodedResult.lng.toString(),
         address: geocodedResult.formatted_address,
-        ...inputs // Spread the inputs state here
+        ...inputs
       });
 
-      console.log("Navigating to:", `/result?${params.toString()}`); // Debugging log
+      console.log("Navigating to:", `/result?${params.toString()}`); // **Debugging Log**
       router.push(`/result?${params.toString()}`);
     } else {
       // If geocoding fails, attempt to get the top prediction

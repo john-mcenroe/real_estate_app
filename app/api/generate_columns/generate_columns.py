@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import traceback
+import math
 
 logging.basicConfig(level=logging.DEBUG, filename='generate_columns.log', filemode='w')
 
@@ -88,19 +89,34 @@ def get_ber_category(ber_rating):
 
 def generate_columns(data):
     try:
+        # Explicitly list input columns
+        address = data.get('Address', '')
+        beds = data.get('Beds', 0)
+        baths = data.get('Baths', 0)
+        property_type = data.get('Property_Type', '')
+        energy_rating = data.get('Energy_Rating', '')
+        
+        
         result = {
-            'bedCategory': get_bed_category(data.get('beds', 0)),
-            'bathCategory': get_bath_category(data.get('baths', 0)),
-            'sizeCategory': get_size_category(data.get('size', 0)),
-            'propertyTypeCategory': get_property_type_category(data.get('property_type', '')),
-            'berCategory': get_ber_category(data.get('ber_rating', '')),
-            'originalInputs': data  # Include original inputs for debugging
+            'bedCategory': get_bed_category(beds),
+            'bathCategory': get_bath_category(baths),
+            'propertyTypeCategory': get_property_type_category(property_type),
+            'berCategory': get_ber_category(energy_rating),
+            'originalInputs': data,  # Include original inputs for debugging
+            'Latitude': latitude,
+            'Longitude': longitude,
         }
         logging.debug(f"Generated result: {result}")
         return result
     except Exception as e:
         logging.error(f"Error in generate_columns: {str(e)}")
         return {"error": str(e)}
+
+# New function to derive latitude and longitude from address
+def get_lat_long_from_address(address):
+    # Placeholder for actual geocoding logic
+    # This should return latitude and longitude based on the address
+    return None, None  # Replace with actual lat/long calculation
 
 if __name__ == "__main__":
     try:

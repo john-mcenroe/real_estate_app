@@ -1,3 +1,3 @@
 DEBUG:root:Script started with arguments: ['/Users/johnmcenroe/Documents/programming_misc/real_estate_app/app/api/generate_columns/generate_columns.py']
-DEBUG:root:Received input: {"beds":"3","baths":"3","size":"30","property_type":"apartment","ber_rating":"A2"}
-DEBUG:root:Generated result: {'bedCategory': '3 Bed', 'bathCategory': '3+ Bath', 'sizeCategory': 'Very Small', 'propertyTypeCategory': 'Apartment', 'berCategory': 'A', 'originalInputs': {'beds': '3', 'baths': '3', 'size': '30', 'property_type': 'apartment', 'ber_rating': 'A2'}}
+DEBUG:root:Received input: {"beds":"4","baths":"3","size":"120","property_type":"bungalow","ber_rating":"A2"}
+ERROR:root:Error in generate_columns: name 'latitude' is not defined
