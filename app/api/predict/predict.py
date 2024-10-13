@@ -4,6 +4,10 @@ import logging
 import os
 import traceback
 import joblib  # For loading the XGBoost model
+import xgboost as xgb
+import pandas as pd
+
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s', stream=sys.stderr)
 
 def load_model(model_path):
     try:
@@ -15,82 +19,68 @@ def load_model(model_path):
         raise
 
 def prepare_features(data):
-    """
-    Prepare the feature vector for prediction.
-    Ensure that the feature names and order match the training data.
-    """
     try:
-        # Example: Assuming the model expects the following features
-        feature_order = [
-            'avg_sold_price_within_1km',
-            'median_sold_price_within_1km',
-            'avg_asking_price_within_1km',
-            'median_asking_price_within_1km',
-            'avg_price_delta_within_1km',
-            'median_price_delta_within_1km',
-            'avg_price_per_sqm_within_1km',
-            'median_price_per_sqm_within_1km',
-            'most_common_ber_rating_within_1km',
-            'property_type_distribution_within_1km',
-            'avg_bedrooms_within_1km',
-            'avg_bathrooms_within_1km',
-            'nearby_properties_count_within_1km',
-            # Add more features as required
-        ]
-
-        features = []
-        for feature in feature_order:
-            value = data.get(feature)
-            if isinstance(value, dict):
-                # For distribution features, you might need to handle them appropriately
-                # For simplicity, we'll take the proportion of 'House' as an example
-                value = value.get('House', 0)
-            features.append(value if value is not None else 0)
+        features = {}
         
-        logging.debug(f"Prepared feature vector: {features}")
-        return [features]  # XGBoost expects a 2D array
+        # Basic features (5)
+        basic_features = ['beds', 'baths', 'size', 'latitude', 'longitude']
+        for feature in basic_features:
+            if feature in ['beds', 'baths', 'size']:
+                features[feature] = float(data['originalInputs'].get(feature, 0))
+            else:
+                features[feature] = data.get(feature, 0)
+        
+        # Nearby properties features (21)
+        for distance in ['1km', '3km', '5km']:
+            for metric in ['nearby_properties_count', 'avg_sold_price', 'median_sold_price', 'avg_asking_price', 'median_asking_price', 'avg_price_delta', 'median_price_delta']:
+                feature_name = f'{metric}_within_{distance}'
+                features[feature_name] = data.get(feature_name, 0)
+        
+        # Property type (as a string, not one-hot encoded)
+        features['property_type'] = data['originalInputs'].get('property_type', '').lower()
+        
+        # Energy rating
+        features['energy_rating'] = data['originalInputs'].get('energy_rating', '')
+        
+        df = pd.DataFrame([features])
+        
+        logging.debug(f"Prepared feature DataFrame: {df}")
+        logging.info(f"Number of features prepared: {len(df.columns)}")
+        
+        return df
     except Exception as e:
         logging.error(f"Error preparing features: {e}")
         raise
 
 def main():
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        stream=sys.stderr
-    )
-
     try:
-        # Load the trained XGBoost model
         model_path = os.path.join(os.path.dirname(__file__), 'xgboost_model.joblib')
         model = load_model(model_path)
 
-        # Read input JSON from stdin
+        # Log model information
+        if hasattr(model, 'feature_names_in_'):
+            logging.info(f"Model expects these features: {model.feature_names_in_}")
+            logging.info(f"Number of features expected by model: {len(model.feature_names_in_)}")
+        else:
+            logging.warning("Unable to determine model's expected features.")
+
         input_data = sys.stdin.read()
         if not input_data:
             logging.error("No input data provided.")
             print(json.dumps({"error": "No input data provided"}))
             sys.exit(1)
 
-        try:
-            data = json.loads(input_data)
-            logging.debug(f"Received input data: {data}")
-        except json.JSONDecodeError as e:
-            logging.error(f"JSON decode error: {e}")
-            print(json.dumps({"error": f"Invalid JSON input: {e}"}))
-            sys.exit(1)
+        data = json.loads(input_data)
+        logging.debug(f"Received input data: {data}")
 
-        # Prepare features for prediction
-        features = prepare_features(data)
+        features_df = prepare_features(data)
+        logging.info(f"Number of features prepared: {features_df.shape[1]}")
+        logging.info(f"Prepared features: {features_df.to_dict(orient='records')}")
 
-        # Run prediction
-        predictions = model.predict(features)
+        predictions = model.predict(features_df)
         logging.info(f"Prediction result: {predictions}")
 
-        # Assuming a single prediction
         prediction = float(predictions[0])
-
-        # Output the prediction as JSON
         print(json.dumps({"prediction": prediction}))
 
     except Exception as e:
@@ -101,4 +91,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
