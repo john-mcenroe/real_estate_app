@@ -5,19 +5,16 @@
 import { Dialog, Transition } from "@headlessui/react";
 import { Fragment, useState, useEffect } from "react";
 import PropTypes from "prop-types";
-import { useRouter } from "next/navigation";
 
-const Modal = ({ isModalOpen, setIsModalOpen, onSubmit }) => {
-  const router = useRouter();
-  const searchParams = new URLSearchParams(window.location.search);
+const Modal = ({ isModalOpen, setIsModalOpen, onSubmit, initialValues }) => {
+  const [inputs, setInputs] = useState(initialValues);
 
-  const [inputs, setInputs] = useState({
-    beds: searchParams.get("beds") || "",
-    baths: searchParams.get("baths") || "",
-    size: searchParams.get("size") || "",
-    property_type: searchParams.get("property_type") || "",
-    ber_rating: searchParams.get("ber_rating") || "",
-  });
+  // Set inputs only when the modal is opened
+  useEffect(() => {
+    if (isModalOpen) {
+      setInputs(initialValues);
+    }
+  }, [isModalOpen, initialValues]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -32,36 +29,7 @@ const Modal = ({ isModalOpen, setIsModalOpen, onSubmit }) => {
     console.log("Modal Inputs:", inputs); // **Debugging Log**
     onSubmit(inputs);
     setIsModalOpen(false);
-
-    // Update URL search params
-    const params = new URLSearchParams({
-      ...Object.fromEntries(searchParams.entries()),
-      beds: inputs.beds,
-      baths: inputs.baths,
-      size: inputs.size,
-      property_type: inputs.property_type,
-      ber_rating: inputs.ber_rating,
-    });
-
-    if (inputs.beds === "") params.delete("beds");
-    if (inputs.baths === "") params.delete("baths");
-    if (inputs.size === "") params.delete("size");
-    if (inputs.property_type === "") params.delete("property_type");
-    if (inputs.ber_rating === "") params.delete("ber_rating");
-
-    router.push(`?${params.toString()}`);
   };
-
-  // To ensure that when the modal opens, it reflects the current URL params
-  useEffect(() => {
-    setInputs({
-      beds: searchParams.get("beds") || "",
-      baths: searchParams.get("baths") || "",
-      size: searchParams.get("size") || "",
-      property_type: searchParams.get("property_type") || "",
-      ber_rating: searchParams.get("ber_rating") || "",
-    });
-  }, [isModalOpen]);
 
   return (
     <Transition appear show={isModalOpen} as={Fragment}>
@@ -142,8 +110,8 @@ const Modal = ({ isModalOpen, setIsModalOpen, onSubmit }) => {
                       type="number"
                       id="size"
                       name="size"
-                      min="1"
-                      step="0.1"
+                      min="10"
+                      step="10"
                       value={inputs.size}
                       onChange={handleChange}
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
@@ -221,6 +189,7 @@ Modal.propTypes = {
   isModalOpen: PropTypes.bool.isRequired,
   setIsModalOpen: PropTypes.func.isRequired,
   onSubmit: PropTypes.func.isRequired,
+  initialValues: PropTypes.object.isRequired,
 };
 
 export default Modal;

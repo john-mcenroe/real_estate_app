@@ -188,10 +188,10 @@ const PropertyValuationHero = () => {
         lat: geocodedResult.lat.toString(),
         lng: geocodedResult.lng.toString(),
         address: geocodedResult.formatted_address,
-        ...inputs
+        ...inputs // Spread the inputs state here
       });
 
-      console.log("Navigating to:", `/result?${params.toString()}`); // **Debugging Log**
+      console.log("Navigating to:", `/result?${params.toString()}`); // Debugging log
       router.push(`/result?${params.toString()}`);
     } else {
       // If geocoding fails, attempt to get the top prediction
@@ -232,7 +232,19 @@ const PropertyValuationHero = () => {
   // Handle Modal Submission
   const handleModalSubmit = (modalInputs) => {
     setInputs(modalInputs);
-    handleSubmitWithCache();
+    if (geocodeAddressCache) {
+      const params = new URLSearchParams({
+        lat: geocodeAddressCache.lat.toString(),
+        lng: geocodeAddressCache.lng.toString(),
+        address: geocodeAddressCache.formatted_address,
+        ...modalInputs // Spread the modal inputs here
+      });
+      console.log("Navigating to:", `/result?${params.toString()}`); // Debugging log
+      router.push(`/result?${params.toString()}`);
+    } else {
+      console.error("Geocoded address information is missing.");
+      alert("Unable to process your request. Please try again.");
+    }
   };
 
   // Ensure inputs are correctly set
@@ -290,8 +302,7 @@ const PropertyValuationHero = () => {
         isModalOpen={isModalOpen}
         setIsModalOpen={setIsModalOpen}
         onSubmit={handleModalSubmit}
-        inputs={inputs}
-        handleChange={handleChange}
+        initialValues={inputs}
       />
 
       <div

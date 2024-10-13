@@ -9,7 +9,8 @@ import {
   calculateConfidenceBands,
   getPropertyCategory,
   calculateSimilarity,
-} from "../utils"; // Adjust the path as necessary
+} from "../utils";
+import Modal from "../../components/Modal";
 
 function ResultComponent() {
   const searchParams = useSearchParams();
@@ -18,22 +19,23 @@ function ResultComponent() {
   const latParam = parseFloat(searchParams.get("lat"));
   const lngParam = parseFloat(searchParams.get("lng"));
 
-  console.log("Received lat:", latParam, "lng:", lngParam); // **Debugging Log**
+  // State to control Modal visibility
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Separate state for inputs and filters
-  const [inputs, setInputs] = useState({
+  // Centralized filter state initialized from URL search params
+  const [filters, setFilters] = useState({
     lat: isNaN(latParam) ? null : latParam,
     lng: isNaN(lngParam) ? null : lngParam,
     address: searchParams.get("address") || "",
-  });
-
-  const [filterInputs, setFilterInputs] = useState({
-    beds: parseInt(searchParams.get("beds"), 10) || 1,
-    baths: parseInt(searchParams.get("baths"), 10) || 1,
-    size: parseInt(searchParams.get("size"), 10) || 30,
-    property_type: searchParams.get("property_type") || "",
+    beds: searchParams.get("beds") || "",
+    baths: searchParams.get("baths") || "",
+    size: searchParams.get("size") || "",
+    property_type: searchParams.get("property_type") || "", // Ensure this is included
     ber_rating: searchParams.get("ber_rating") || "",
   });
+
+  // Temporary state for handling form inputs before submission
+  const [tempFilters, setTempFilters] = useState(filters);
 
   const [state, setState] = useState({
     properties: [],
@@ -43,60 +45,40 @@ function ResultComponent() {
     error: null,
   });
 
-  const { beds, baths, size, property_type, ber_rating } = filterInputs;
-  const { lat, lng, address } = inputs;
+  const { beds, baths, size, property_type, ber_rating, lat, lng, address } = filters;
 
   const TOP_N = 30;
 
-  // New state to hold the generated columns
+  // State to hold generated columns from the server
   const [generatedColumns, setGeneratedColumns] = useState(null);
 
-  // Handle input changes for filterInputs
+  // Handle input changes in the filter form
   const handleChange = (field) => (e) => {
-    const value =
-      field === "property_type" || field === "ber_rating"
-        ? e.target.value
-        : e.target.value === ""
-        ? ""
-        : parseFloat(e.target.value) || 0;
-    setFilterInputs((prev) => ({ ...prev, [field]: value }));
+    const value = e.target.value;
+    setTempFilters((prev) => ({ ...prev, [field]: value }));
   };
 
-  // Handle "Recalculate" button click
+  // Handle filter form submission
   const handleRecalculate = (e) => {
-    e.preventDefault(); // Prevent default form submission
-    const newInputs = {
-      ...inputs,
-      beds: filterInputs.beds,
-      baths: filterInputs.baths,
-      size: filterInputs.size,
-      property_type: filterInputs.property_type,
-      ber_rating: filterInputs.ber_rating,
-    };
-    setInputs(newInputs);
-    updateURL(newInputs);
+    e.preventDefault();
+    setFilters(tempFilters);
+    updateURL(tempFilters);
   };
 
-  // Function to update the URL based on applied filters
-  const updateURL = (newInputs) => {
-    const params = new URLSearchParams({
-      lat: newInputs.lat.toString(),
-      lng: newInputs.lng.toString(),
-      beds: newInputs.beds.toString(),
-      baths: newInputs.baths.toString(),
-      size: newInputs.size.toString(),
-      property_type: newInputs.property_type,
-      ber_rating: newInputs.ber_rating,
-    });
-
-    if (newInputs.address) {
-      params.set("address", newInputs.address);
-    }
-
-    console.log("Updating URL to:", `?${params.toString()}`); // **Debugging Log**
-    router.push(`?${params.toString()}`);
+  // Update URL search parameters based on filters
+  const updateURL = (newFilters) => {
+    const params = new URLSearchParams(newFilters);
+    router.push(`/result?${params.toString()}`);
   };
 
+  // Handle Modal form submission
+  const handleModalSubmit = (newFilters) => {
+    setFilters(newFilters);
+    updateURL(newFilters);
+    setTempFilters(newFilters); // Update temporary filters as well
+  };
+
+  // Fetch properties based on current filters
   const fetchProperties = useCallback(async () => {
     setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
@@ -105,9 +87,9 @@ function ResultComponent() {
         throw new Error("Latitude and longitude are required");
       }
 
-      console.log("Fetching properties with inputs:", { ...inputs, ...filterInputs }); // **Debugging Log**
+      console.log("Fetching properties with filters:", filters); // Debugging Log
 
-      // Fetch properties from the new table
+      // Fetch properties from Supabase
       const { data: properties, error } = await supabase
         .from("scraped_property_data_v1") // Updated table name
         .select(`
@@ -176,11 +158,11 @@ function ResultComponent() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          beds: filterInputs.beds,
-          baths: filterInputs.baths,
-          size: filterInputs.size,
-          property_type: filterInputs.property_type,
-          ber_rating: filterInputs.ber_rating,
+          beds,
+          baths,
+          size,
+          property_type,
+          ber_rating,
         }),
       });
 
@@ -193,6 +175,7 @@ function ResultComponent() {
       }
 
       const generatedColumnsData = await response.json();
+      console.log("Generated columns data:", generatedColumnsData); // Log the response
       setGeneratedColumns(generatedColumnsData);
 
       // Assuming generatedColumnsData contains necessary additional data
@@ -245,10 +228,10 @@ function ResultComponent() {
         loading: false,
       }));
     }
-  }, [inputs.lat, inputs.lng, filterInputs]);
+  }, [filters, beds, baths, size, property_type, ber_rating, lat, lng]);
 
   useEffect(() => {
-    if (inputs.lat !== null && inputs.lng !== null) {
+    if (filters.lat !== null && filters.lng !== null) {
       fetchProperties();
     } else {
       setState((prev) => ({
@@ -257,7 +240,7 @@ function ResultComponent() {
         loading: false,
       }));
     }
-  }, [inputs.lat, inputs.lng, fetchProperties]);
+  }, [filters, fetchProperties]);
 
   if (state.loading) {
     return <div className="text-center">Loading properties...</div>;
@@ -269,15 +252,24 @@ function ResultComponent() {
 
   return (
     <div className="container mx-auto px-4 py-6">
+      {/* Modal Component */}
+      <Modal
+        isModalOpen={isModalOpen}
+        setIsModalOpen={setIsModalOpen}
+        onSubmit={handleModalSubmit}
+        initialValues={filters}
+      />
+
+      {/* Filters Form */}
       <form onSubmit={handleRecalculate}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* House Details */}
           <div className="bg-gray-100 p-6 rounded-lg shadow-md">
             <h2 className="text-lg font-semibold mb-4">House Details</h2>
-            {address ? (
+            {filters.address ? (
               <div>
                 <p>
-                  <strong>Address:</strong> {address}
+                  <strong>Address:</strong> {filters.address}
                 </p>
                 <div className="mt-4 flex flex-wrap items-end space-x-4">
                   {/* Beds Input */}
@@ -292,7 +284,7 @@ function ResultComponent() {
                       min={1}
                       max={10}
                       step={1}
-                      value={filterInputs.beds}
+                      value={tempFilters.beds}
                       onChange={handleChange("beds")}
                       className="mt-1 w-20 p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
                     />
@@ -309,7 +301,7 @@ function ResultComponent() {
                       min={1}
                       max={10}
                       step={1}
-                      value={filterInputs.baths}
+                      value={tempFilters.baths}
                       onChange={handleChange("baths")}
                       className="mt-1 w-20 p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
                     />
@@ -326,7 +318,7 @@ function ResultComponent() {
                       min={10}
                       max={1000}
                       step={10}
-                      value={filterInputs.size}
+                      value={tempFilters.size}
                       onChange={handleChange("size")}
                       className="mt-1 w-24 p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
                     />
@@ -339,16 +331,16 @@ function ResultComponent() {
                     <select
                       id="property_type"
                       name="property_type"
-                      value={filterInputs.property_type}
+                      value={tempFilters.property_type}
                       onChange={handleChange("property_type")}
                       className="mt-1 w-32 p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
                     >
                       <option value="">Select Type</option>
-                      <option value="Apartment">Apartment</option>
-                      <option value="House">House</option>
-                      <option value="Bungalow">Bungalow</option>
-                      <option value="Studio">Studio</option>
-                      <option value="Villa">Villa</option>
+                      <option value="house">House</option>
+                      <option value="apartment">Apartment</option>
+                      <option value="bungalow">Bungalow</option>
+                      <option value="cottage">Cottage</option>
+                      <option value="villa">Villa</option>
                     </select>
                   </div>
                   {/* BER Rating Dropdown */}
@@ -359,7 +351,7 @@ function ResultComponent() {
                     <select
                       id="ber_rating"
                       name="ber_rating"
-                      value={filterInputs.ber_rating}
+                      value={tempFilters.ber_rating}
                       onChange={handleChange("ber_rating")}
                       className="mt-1 w-20 p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
                     >
