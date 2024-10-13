@@ -1,3 +1,8 @@
-DEBUG:root:Script started with arguments: ['/Users/johnmcenroe/Documents/programming_misc/real_estate_app/app/api/generate_columns/generate_columns.py']
-DEBUG:root:Received input: {"beds":"4","baths":"3","size":"120","property_type":"bungalow","ber_rating":"A2","latitude":53.3390102,"longitude":-6.2619652}
-DEBUG:root:Generated result: {'bedCategory': 'Studio/1 Bed', 'bathCategory': '1 Bath', 'propertyTypeCategory': 'Other', 'berCategory': 'Unknown', 'originalInputs': {'beds': '4', 'baths': '3', 'size': '120', 'property_type': 'bungalow', 'ber_rating': 'A2', 'latitude': 53.3390102, 'longitude': -6.2619652}, 'Latitude': 53.3390102, 'Longitude': -6.2619652}
+2024-10-13 18:24:09,580 - DEBUG - load_ssl_context verify=True cert=None trust_env=True http2=False
+2024-10-13 18:24:09,581 - DEBUG - load_verify_locations cafile='/Users/johnmcenroe/.pyenv/versions/3.12.0/lib/python3.12/site-packages/certifi/cacert.pem'
+2024-10-13 18:24:09,588 - INFO - Successfully connected to Supabase.
+2024-10-13 18:24:09,588 - DEBUG - Python script started
+2024-10-13 18:24:09,588 - DEBUG - Current working directory: /Users/johnmcenroe/Documents/programming_misc/real_estate_app
+2024-10-13 18:24:09,588 - DEBUG - Number of command-line arguments: 1
+2024-10-13 18:24:09,588 - DEBUG - Argument 0: /Users/johnmcenroe/Documents/programming_misc/real_estate_app/app/api/generate_columns/generate_columns.py
+2024-10-13 18:24:09,588 - ERROR - No input JSON provided as command-line argument
