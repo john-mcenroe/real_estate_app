@@ -51,6 +51,7 @@ function ResultComponent() {
 
   // State to hold generated columns from the server
   const [generatedColumns, setGeneratedColumns] = useState(null);
+  const [xgboostPrediction, setXgboostPrediction] = useState(null);
 
   // Handle input changes in the filter form
   const handleChange = (field) => (e) => {
@@ -163,7 +164,7 @@ function ResultComponent() {
           size,
           property_type,
           ber_rating,
-          latitude: lat,  // Use latitude
+          latitude: lat,
           longitude: lng, 
         }),
       });
@@ -177,8 +178,29 @@ function ResultComponent() {
       }
 
       const generatedColumnsData = await response.json();
-      console.log("Generated columns data:", generatedColumnsData); // Log the response
+      console.log("Generated columns data:", generatedColumnsData);
       setGeneratedColumns(generatedColumnsData);
+
+      // Call the XGBoost prediction API
+      const predictionResponse = await fetch("/api/predict", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(generatedColumnsData),
+      });
+
+      if (!predictionResponse.ok) {
+        const predictionErrorData = await predictionResponse.json();
+        console.error("Error response from XGBoost prediction:", predictionErrorData);
+        throw new Error(
+          `Failed to get XGBoost prediction: ${predictionErrorData.message || JSON.stringify(predictionErrorData)}`
+        );
+      }
+
+      const predictionResult = await predictionResponse.json();
+      console.log("XGBoost prediction result:", predictionResult);
+      setXgboostPrediction(predictionResult.prediction);
 
       // Assuming generatedColumnsData contains necessary additional data
       const inputPropertyWithAdditionalColumns = generatedColumnsData;
@@ -498,6 +520,19 @@ function ResultComponent() {
           <pre className="bg-gray-100 p-4 rounded overflow-x-auto">
             {JSON.stringify(generatedColumns, null, 2)}
           </pre>
+        </div>
+      )}
+
+      {/* Display XGBoost Prediction */}
+      {xgboostPrediction !== null && (
+        <div className="mt-8 bg-white p-6 rounded-lg shadow-md">
+          <h2 className="text-xl font-semibold mb-4">XGBoost Prediction</h2>
+          <p className="text-2xl font-bold text-green-500">
+            €{xgboostPrediction.toLocaleString()}
+          </p>
+          <p className="text-sm text-gray-500 mt-2">
+            This is the predicted price based on the XGBoost model.
+          </p>
         </div>
       )}
     </div>
