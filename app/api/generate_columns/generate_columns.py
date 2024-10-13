@@ -116,36 +116,65 @@ def haversine_distance(lat1, lon1, lat2, lon2):
         logging.error(f"Error calculating Haversine distance: {e}")
         return None
 
+def calculate_distance(lat1, lon1, lat2, lon2):
+    R = 6371  # Radius of the Earth in kilometers
+    
+    lat1_rad = math.radians(lat1)
+    lon1_rad = math.radians(lon1)
+    lat2_rad = math.radians(lat2)
+    lon2_rad = math.radians(lon2)
+    
+    dlat = lat2_rad - lat1_rad
+    dlon = lon2_rad - lon1_rad
+    
+    a = math.sin(dlat/2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlon/2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+    
+    distance = R * c
+    return distance
+
 def fetch_nearby_properties(latitude, longitude, radius_km=5):
-    """
-    Fetch properties within a certain radius from the given latitude and longitude.
-    """
     try:
         logging.info(f"Fetching properties within {radius_km} KM of ({latitude}, {longitude})")
-        # Fetch all properties with valid latitude and longitude
-        response = supabase.table("scraped_property_data_v1").select("*").execute()
+        
+        # Calculate the approximate bounding box
+        lat_range = radius_km / 111.32  # 1 degree of latitude is approximately 111.32 km
+        lon_range = radius_km / (111.32 * math.cos(math.radians(latitude)))
+        
+        min_lat = latitude - lat_range
+        max_lat = latitude + lat_range
+        min_lon = longitude - lon_range
+        max_lon = longitude + lon_range
+        
+        # Query the database using the bounding box
+        response = supabase.table("scraped_property_data_v1") \
+            .select("*") \
+            .gte("latitude", min_lat) \
+            .lte("latitude", max_lat) \
+            .gte("longitude", min_lon) \
+            .lte("longitude", max_lon) \
+            .execute()
         
         all_properties = response.data
-        logging.info(f"Total properties fetched from DB: {len(all_properties)}")
+        logging.info(f"Properties within bounding box: {len(all_properties)}")
+        
         nearby_properties = []
-
         for prop in all_properties:
-            prop_id = prop.get('id', 'Unknown ID')
-            prop_lat = prop.get('Latitude')
-            prop_lon = prop.get('Longitude')
-            if prop_lat is None or prop_lon is None:
-                logging.debug(f"Skipping property with missing coordinates: {prop_id}")
-                continue
-            distance = haversine_distance(latitude, longitude, prop_lat, prop_lon)
-            if distance is not None and distance <= radius_km:
-                prop['Distance_km'] = distance
-                nearby_properties.append(prop)
-
-        logging.info(f"Properties within {radius_km} KM: {len(nearby_properties)}")
-        if nearby_properties:
-            logging.debug(f"First nearby property: {nearby_properties[0]}")
-        else:
-            logging.warning(f"No nearby properties found within {radius_km} KM")
+            prop_lat = prop.get('latitude')
+            prop_lon = prop.get('longitude')
+            if prop_lat is not None and prop_lon is not None:
+                try:
+                    prop_lat = float(prop_lat)
+                    prop_lon = float(prop_lon)
+                    distance = calculate_distance(latitude, longitude, prop_lat, prop_lon)
+                    if distance <= radius_km:
+                        nearby_properties.append(prop)
+                except ValueError:
+                    logging.warning(f"Invalid coordinates for property: {prop.get('id')}")
+            else:
+                logging.debug(f"Skipping property with missing coordinates: {prop.get('id')}")
+        
+        logging.info(f"Number of nearby properties found: {len(nearby_properties)}")
         return nearby_properties
     except Exception as e:
         logging.error(f"Error fetching nearby properties: {e}")
@@ -229,13 +258,14 @@ def generate_columns(data):
         logging.debug(f"Filtered input data: {data}")
 
         # Explicitly list input columns
-        address = data.get('Address', '')
+        address = data.get('address', '')
         beds = data.get('beds', '0')
         baths = data.get('baths', '0')
         property_type = data.get('property_type', '')
-        energy_rating = data.get('ber_rating', '')
-        latitude = data.get('latitude', None)
-        longitude = data.get('longitude', None)
+        energy_rating = data.get('energy_rating', '')
+        latitude = data.get('latitude')
+        longitude = data.get('longitude')
+        logging.info(f"Input property coordinates: Lat {latitude}, Long {longitude}")
 
         # Validate essential fields
         if latitude is None or longitude is None:
@@ -248,23 +278,29 @@ def generate_columns(data):
             'propertyTypeCategory': get_property_type_category(property_type),
             'berCategory': get_ber_category(energy_rating),
             'originalInputs': data,  # Include original inputs for debugging
-            'Latitude': latitude,
-            'Longitude': longitude,
+            'latitude': latitude,
+            'longitude': longitude,
         }
         logging.debug(f"Initial derived categories: {result}")
 
         # Fetch nearby properties (e.g., within 5 KM)
         if latitude is not None and longitude is not None:
-            nearby_props = fetch_nearby_properties(latitude, longitude, radius_km=5)
-            logging.info(f"Number of nearby properties found: {len(nearby_props)}")
-            if nearby_props:
-                logging.debug(f"First 5 nearby properties: {nearby_props[:5]}")
-                nearby_metrics = calculate_nearby_metrics(nearby_props)
-                logging.debug(f"Nearby metrics: {nearby_metrics}")
-                result.update(nearby_metrics)
-            else:
-                logging.warning("No nearby properties found to calculate metrics.")
-            result['nearby_properties_count'] = len(nearby_props)
+            try:
+                latitude = float(latitude)
+                longitude = float(longitude)
+                nearby_props = fetch_nearby_properties(latitude, longitude, radius_km=5)
+                logging.info(f"Number of nearby properties found: {len(nearby_props)}")
+                if nearby_props:
+                    logging.debug(f"First 5 nearby properties: {nearby_props[:5]}")
+                    nearby_metrics = calculate_nearby_metrics(nearby_props)
+                    logging.debug(f"Nearby metrics: {nearby_metrics}")
+                    result.update(nearby_metrics)
+                else:
+                    logging.warning("No nearby properties found to calculate metrics.")
+                result['nearby_properties_count'] = len(nearby_props)
+            except ValueError:
+                logging.error(f"Invalid latitude or longitude: {latitude}, {longitude}")
+                result['nearby_properties_count'] = 0
         else:
             logging.warning("Latitude or longitude is missing, skipping nearby properties calculation.")
             result['nearby_properties_count'] = 0
