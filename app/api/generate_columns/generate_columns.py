@@ -6,7 +6,7 @@ import traceback
 import math
 from dotenv import load_dotenv
 from supabase import create_client, Client
-from statistics import median
+from statistics import median, mode
 
 # Load environment variables from .env.local
 load_dotenv(".env.local")
@@ -133,7 +133,7 @@ def calculate_distance(lat1, lon1, lat2, lon2):
     distance = R * c
     return distance
 
-def fetch_nearby_properties(latitude, longitude, radius_km=5):
+def fetch_nearby_properties(latitude, longitude, radius_km):
     try:
         logging.info(f"Fetching properties within {radius_km} KM of ({latitude}, {longitude})")
         
@@ -174,74 +174,63 @@ def fetch_nearby_properties(latitude, longitude, radius_km=5):
             else:
                 logging.debug(f"Skipping property with missing coordinates: {prop.get('id')}")
         
-        logging.info(f"Number of nearby properties found: {len(nearby_properties)}")
+        logging.info(f"Number of nearby properties found within {radius_km}km: {len(nearby_properties)}")
         return nearby_properties
     except Exception as e:
         logging.error(f"Error fetching nearby properties: {e}")
         logging.error(traceback.format_exc())
         return []
 
-def calculate_nearby_metrics(nearby_properties):
-    """
-    Calculate metrics based on nearby properties.
-    """
+def calculate_nearby_metrics(nearby_properties, radius):
     metrics = {}
-    try:
-        if not nearby_properties:
-            logging.warning("No nearby properties found within the specified radius.")
-            return metrics
-
-        # Extract relevant data
-        sold_prices = [prop['Sale_Price'] for prop in nearby_properties if prop.get('Sale_Price') is not None]
-        ber_ratings = [prop['Energy_Rating'] for prop in nearby_properties if prop.get('Energy_Rating')]
-        property_types = [prop['Property_Type'] for prop in nearby_properties if prop.get('Property_Type')]
-
-        logging.debug(f"Number of sold prices: {len(sold_prices)}")
-        logging.debug(f"Number of BER ratings: {len(ber_ratings)}")
-        logging.debug(f"Number of property types: {len(property_types)}")
-
-        # Calculate Average Sold Price
-        if sold_prices:
-            avg_sold_price = sum(sold_prices) / len(sold_prices)
-            metrics['nearby_avg_sold_price'] = round(avg_sold_price, 2)
-            logging.debug(f"Calculated nearby_avg_sold_price: {metrics['nearby_avg_sold_price']}")
-        else:
-            metrics['nearby_avg_sold_price'] = None
-            logging.debug("No valid sold prices found to calculate average.")
-
-        # Calculate Median Sold Price
-        if sold_prices:
-            median_sold_price = median(sold_prices)
-            metrics['nearby_median_sold_price'] = round(median_sold_price, 2)
-            logging.debug(f"Calculated nearby_median_sold_price: {metrics['nearby_median_sold_price']}")
-        else:
-            metrics['nearby_median_sold_price'] = None
-            logging.debug("No valid sold prices found to calculate median.")
-
-        # Calculate BER Category A Percentage
-        if ber_ratings:
-            ber_A_count = ber_ratings.count('A')
-            ber_A_percent = (ber_A_count / len(ber_ratings)) * 100
-            metrics['nearby_ber_A_percent'] = round(ber_A_percent, 2)
-            logging.debug(f"Calculated nearby_ber_A_percent: {metrics['nearby_ber_A_percent']}")
-        else:
-            metrics['nearby_ber_A_percent'] = None
-            logging.debug("No BER ratings found to calculate BER Category A percentage.")
-
-        # Calculate Property Type Townhouse Percentage
-        if property_types:
-            townhouse_count = sum(1 for pt in property_types if pt.lower() == 'townhouse')
-            townhouse_percent = (townhouse_count / len(property_types)) * 100
-            metrics['nearby_property_type_townhouse_percent'] = round(townhouse_percent, 2)
-            logging.debug(f"Calculated nearby_property_type_townhouse_percent: {metrics['nearby_property_type_townhouse_percent']}")
-        else:
-            metrics['nearby_property_type_townhouse_percent'] = None
-            logging.debug("No property types found to calculate townhouse percentage.")
-
-    except Exception as e:
-        logging.error(f"Error calculating nearby metrics: {e}")
-        logging.error(traceback.format_exc())
-
+    
+    # Calculate average and median sold price
+    sold_prices = [float(prop['sale_price']) for prop in nearby_properties if prop.get('sale_price')]
+    if sold_prices:
+        metrics[f'avg_sold_price_within_{radius}km'] = sum(sold_prices) / len(sold_prices)
+        metrics[f'median_sold_price_within_{radius}km'] = median(sold_prices)
+    
+    # Calculate average and median asking price
+    asking_prices = [float(prop['asking_price']) for prop in nearby_properties if prop.get('asking_price')]
+    if asking_prices:
+        metrics[f'avg_asking_price_within_{radius}km'] = sum(asking_prices) / len(asking_prices)
+        metrics[f'median_asking_price_within_{radius}km'] = median(asking_prices)
+    
+    # Calculate average and median delta between asking and sold prices
+    deltas = [float(prop['sale_price']) - float(prop['asking_price']) 
+              for prop in nearby_properties 
+              if prop.get('sale_price') and prop.get('asking_price')]
+    if deltas:
+        metrics[f'avg_price_delta_within_{radius}km'] = sum(deltas) / len(deltas)
+        metrics[f'median_price_delta_within_{radius}km'] = median(deltas)
+    
+    # Calculate average and median price per square meter
+    price_per_sqm = [float(prop['price_per_square_meter']) for prop in nearby_properties if prop.get('price_per_square_meter')]
+    if price_per_sqm:
+        metrics[f'avg_price_per_sqm_within_{radius}km'] = sum(price_per_sqm) / len(price_per_sqm)
+        metrics[f'median_price_per_sqm_within_{radius}km'] = median(price_per_sqm)
+    
+    # Calculate most common BER rating
+    ber_ratings = [prop['energy_rating'] for prop in nearby_properties if prop.get('energy_rating')]
+    if ber_ratings:
+        metrics[f'most_common_ber_rating_within_{radius}km'] = mode(ber_ratings)
+    
+    # Calculate property type distribution
+    property_types = [prop['property_type'] for prop in nearby_properties if prop.get('property_type')]
+    if property_types:
+        type_distribution = {t: property_types.count(t) / len(property_types) for t in set(property_types)}
+        metrics[f'property_type_distribution_within_{radius}km'] = type_distribution
+    
+    # Calculate average number of bedrooms and bathrooms
+    beds = [int(prop['beds']) for prop in nearby_properties if prop.get('beds') and prop['beds'].isdigit()]
+    baths = [int(prop['baths']) for prop in nearby_properties if prop.get('baths') and prop['baths'].isdigit()]
+    if beds:
+        metrics[f'avg_bedrooms_within_{radius}km'] = sum(beds) / len(beds)
+    if baths:
+        metrics[f'avg_bathrooms_within_{radius}km'] = sum(baths) / len(baths)
+    
+    metrics[f'nearby_properties_count_within_{radius}km'] = len(nearby_properties)
+    
     return metrics
 
 def generate_columns(data):
@@ -277,33 +266,32 @@ def generate_columns(data):
             'bathCategory': get_bath_category(baths),
             'propertyTypeCategory': get_property_type_category(property_type),
             'berCategory': get_ber_category(energy_rating),
-            'originalInputs': data,  # Include original inputs for debugging
+            'originalInputs': data,
             'latitude': latitude,
             'longitude': longitude,
         }
-        logging.debug(f"Initial derived categories: {result}")
 
-        # Fetch nearby properties (e.g., within 5 KM)
+        # Fetch nearby properties and calculate metrics for 1km, 3km, and 5km
         if latitude is not None and longitude is not None:
             try:
                 latitude = float(latitude)
                 longitude = float(longitude)
-                nearby_props = fetch_nearby_properties(latitude, longitude, radius_km=5)
-                logging.info(f"Number of nearby properties found: {len(nearby_props)}")
-                if nearby_props:
-                    logging.debug(f"First 5 nearby properties: {nearby_props[:5]}")
-                    nearby_metrics = calculate_nearby_metrics(nearby_props)
-                    logging.debug(f"Nearby metrics: {nearby_metrics}")
-                    result.update(nearby_metrics)
-                else:
-                    logging.warning("No nearby properties found to calculate metrics.")
-                result['nearby_properties_count'] = len(nearby_props)
+                for radius in [1, 3, 5]:
+                    nearby_props = fetch_nearby_properties(latitude, longitude, radius_km=radius)
+                    result[f'nearby_properties_count_within_{radius}km'] = len(nearby_props)
+                    if nearby_props:
+                        nearby_metrics = calculate_nearby_metrics(nearby_props, radius)
+                        result.update(nearby_metrics)
+                    else:
+                        logging.warning(f"No nearby properties found within {radius}km to calculate metrics.")
             except ValueError:
                 logging.error(f"Invalid latitude or longitude: {latitude}, {longitude}")
-                result['nearby_properties_count'] = 0
+                for radius in [1, 3, 5]:
+                    result[f'nearby_properties_count_within_{radius}km'] = 0
         else:
             logging.warning("Latitude or longitude is missing, skipping nearby properties calculation.")
-            result['nearby_properties_count'] = 0
+            for radius in [1, 3, 5]:
+                result[f'nearby_properties_count_within_{radius}km'] = 0
 
         logging.info("Finished generate_columns function.")
         logging.debug(f"Generated result: {result}")
