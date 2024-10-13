@@ -163,6 +163,8 @@ function ResultComponent() {
           size,
           property_type,
           ber_rating,
+          latitude: lat,  // Use latitude
+          longitude: lng, 
         }),
       });
 

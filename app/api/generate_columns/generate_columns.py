@@ -95,6 +95,8 @@ def generate_columns(data):
         baths = data.get('Baths', 0)
         property_type = data.get('Property_Type', '')
         energy_rating = data.get('Energy_Rating', '')
+        latitude = data.get('latitude', None)  # Updated to use latitude
+        longitude = data.get('longitude', None)  # Updated to use longitude        
         
         
         result = {
@@ -103,8 +105,8 @@ def generate_columns(data):
             'propertyTypeCategory': get_property_type_category(property_type),
             'berCategory': get_ber_category(energy_rating),
             'originalInputs': data,  # Include original inputs for debugging
-            'Latitude': latitude,
-            'Longitude': longitude,
+            'Latitude': latitude,  # Updated to use latitude
+            'Longitude': longitude,  
         }
         logging.debug(f"Generated result: {result}")
         return result
