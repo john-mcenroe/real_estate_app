@@ -155,27 +155,6 @@ function ResultComponent() {
         return;
       }
 
-      console.log("Data being sent to generate_columns:", {
-        beds,
-        baths,
-        size,
-        property_type,
-        ber_rating,
-        latitude: lat,
-        longitude: lng,
-      });
-
-      console.log("About to call generate_columns API");
-      console.log("Data being sent:", {
-        beds,
-        baths,
-        size,
-        property_type,
-        ber_rating,
-        latitude: lat,
-        longitude: lng,
-      });
-
       // Call the serverless function to generate additional columns
       const response = await fetch("/api/generate_columns", {
         method: "POST",
@@ -204,20 +183,6 @@ function ResultComponent() {
       const generatedColumnsData = await response.json();
       console.log("Generated columns data:", generatedColumnsData);
       setGeneratedColumns(generatedColumnsData);
-
-      console.log("About to call predict API");
-      console.log("Data being sent to predict:", {
-        originalInputs: {
-          property_type,
-          size,
-          ber_rating,
-          latitude: lat,
-          longitude: lng,
-          beds,
-          baths,
-        },
-        ...generatedColumnsData,
-      });
 
       // Call the XGBoost prediction API
       const predictionResponse = await fetch("/api/predict", {
@@ -249,20 +214,27 @@ function ResultComponent() {
 
       const predictionResult = await predictionResponse.json();
       console.log("Received prediction:", predictionResult.prediction);
-      console.log("Setting new prediction:", predictionResult.prediction);
-      setXgboostPrediction(predictionResult.prediction);
 
-      // Calculate similarity scores
+      // Round the prediction to the nearest $10
+      const roundedPrediction = Math.round(predictionResult.prediction / 10) * 10;
+      setXgboostPrediction(roundedPrediction);
+
+      const lowerBound = roundedPrediction * 0.8; // 20% lower
+      const upperBound = roundedPrediction * 1.2; // 20% higher
+
+      // Calculate similarity scores and filter properties
       const propertiesWithSimilarity = filtered
-        .map((property) => calculateSimilarity(property, generatedColumnsData))
-        .filter((p) => p.categoryScore > 0)
-        .sort((a, b) => {
-          if (b.categoryScore !== a.categoryScore) {
-            return b.categoryScore - a.categoryScore;
-          }
-          return a.distance - b.distance;
-        })
-        .slice(0, TOP_N);
+        .map((property) => ({
+          ...property,
+          distance: haversineDistance(lat, lng, property.latitude, property.longitude),
+        }))
+        .filter((p) => 
+          p.distance <= 10 && // Limit to properties within 10 km
+          p.sale_price >= lowerBound &&
+          p.sale_price <= upperBound
+        )
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, 28);
 
       console.log("Properties with similarity:", propertiesWithSimilarity);
 
@@ -276,10 +248,6 @@ function ResultComponent() {
         }));
         return;
       }
-
-      const topPrices = propertiesWithSimilarity
-        .map((p) => parseFloat(p.sale_price))
-        .filter((price) => !isNaN(price) && price > 0);
 
       setState((prev) => ({
         ...prev,
@@ -551,18 +519,6 @@ function ResultComponent() {
           )}
         </div>
       </div>
-
-      {/* Display Generated Columns */}
-      {generatedColumns && (
-        <div className="mt-8 bg-white p-6 rounded-lg shadow-md">
-          <h2 className="text-xl font-semibold mb-4">Generated Columns</h2>
-          <pre className="bg-gray-100 p-4 rounded overflow-x-auto">
-            {JSON.stringify(generatedColumns, null, 2)}
-          </pre>
-        </div>
-      )}
-
-      {/* Removed XGBoost Prediction Section as it's now in "Price Estimate" */}
     </div>
   );
 }
