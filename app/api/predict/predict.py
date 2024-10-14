@@ -22,25 +22,44 @@ def prepare_features(data):
     try:
         features = {}
         
-        # Basic features (5)
+        # Log the received data
+        logging.debug(f"Data received for feature preparation: {json.dumps(data, indent=2)}")
+        
+        # Basic features
+        original_inputs = data.get('originalInputs', {})
+        logging.debug(f"Original Inputs: {original_inputs}")
+        
         basic_features = ['beds', 'baths', 'size', 'latitude', 'longitude']
         for feature in basic_features:
-            if feature in ['beds', 'baths', 'size']:
-                features[feature] = float(data['originalInputs'].get(feature, 0))
-            else:
-                features[feature] = data.get(feature, 0)
+            value = float(original_inputs.get(feature, 0))
+            features[feature if feature != 'size' else 'myhome_floor_area_value'] = value
+            logging.debug(f"Feature {feature}: {value}")
         
-        # Nearby properties features (21)
-        for distance in ['1km', '3km', '5km']:
-            for metric in ['nearby_properties_count', 'avg_sold_price', 'median_sold_price', 'avg_asking_price', 'median_asking_price', 'avg_price_delta', 'median_price_delta']:
-                feature_name = f'{metric}_within_{distance}'
-                features[feature_name] = data.get(feature_name, 0)
+        # Categorical features
+        categorical_features = ['bedCategory', 'bathCategory', 'propertyTypeCategory', 'berCategory', 'sizeCategory']
+        for feature in categorical_features:
+            value = data.get(feature, 'Unknown')
+            features[feature] = value
+            logging.debug(f"Categorical Feature {feature}: {value}")
         
-        # Property type (as a string, not one-hot encoded)
-        features['property_type'] = data['originalInputs'].get('property_type', '').lower()
+        # Property type and energy rating
+        features['property_type'] = original_inputs.get('property_type', '').lower()
+        logging.debug(f"Property Type: {features['property_type']}")
         
-        # Energy rating
-        features['energy_rating'] = data['originalInputs'].get('energy_rating', '')
+        features['energy_rating'] = original_inputs.get('ber_rating', '')
+        logging.debug(f"Energy Rating: {features['energy_rating']}")
+        
+        # Add the missing energy_rating_numeric feature
+        features['energy_rating_numeric'] = data.get('energy_rating_numeric', 0)
+        logging.debug(f"Energy Rating Numeric: {features['energy_rating_numeric']}")
+        
+        # Nearby properties features
+        for radius in [1, 3, 5]:
+            for metric in ['nearby_properties_count', 'avg_sold_price', 'median_sold_price', 'avg_asking_price', 'median_asking_price', 'avg_price_delta', 'median_price_delta', 'avg_price_per_sqm', 'median_price_per_sqm', 'avg_bedrooms', 'avg_bathrooms']:
+                feature_name = f'{metric}_within_{radius}km'
+                value = data.get(feature_name, 0)
+                features[feature_name] = value
+                logging.debug(f"Feature {feature_name}: {value}")
         
         df = pd.DataFrame([features])
         
@@ -75,13 +94,32 @@ def main():
 
         features_df = prepare_features(data)
         logging.info(f"Number of features prepared: {features_df.shape[1]}")
-        logging.info(f"Prepared features: {features_df.to_dict(orient='records')}")
+        logging.info(f"Prepared features: {features_df.columns.tolist()}")
+
+        # Log the input column values used for prediction
+        logging.info(f"Input column values for prediction:\n{features_df.to_dict(orient='records')[0]}")
+
+        # Compare prepared features with model features
+        if hasattr(model, 'feature_names_in_'):
+            missing_features = set(model.feature_names_in_) - set(features_df.columns)
+            extra_features = set(features_df.columns) - set(model.feature_names_in_)
+            
+            if missing_features:
+                logging.warning(f"Missing features: {missing_features}")
+            if extra_features:
+                logging.warning(f"Extra features that will be ignored: {extra_features}")
 
         predictions = model.predict(features_df)
         logging.info(f"Prediction result: {predictions}")
 
         prediction = float(predictions[0])
         print(json.dumps({"prediction": prediction}))
+
+        if hasattr(model, 'feature_importances_'):
+            importances = model.feature_importances_
+            feature_imp = pd.DataFrame({'feature': features_df.columns, 'importance': importances})
+            feature_imp = feature_imp.sort_values('importance', ascending=False)
+            logging.info(f"Feature importances:\n{feature_imp}")
 
     except Exception as e:
         logging.error(f"An error occurred: {e}")

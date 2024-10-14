@@ -7,6 +7,8 @@ import math
 from dotenv import load_dotenv
 from supabase import create_client, Client
 from statistics import median, mode
+import pandas as pd
+import numpy as np
 
 # Load environment variables from .env.local
 load_dotenv(".env.local")
@@ -41,7 +43,7 @@ def get_property_type_category(property_type):
         return 'Unknown'
     if property_type.lower() in ['apartment', 'flat', 'studio']:
         return 'Apartment'
-    elif property_type.lower() in ['house', 'bungalow', 'cottage', 'villa', 'townhouse']:
+    elif property_type.lower() in ['house', 'bungalow', 'cottage', 'villa', 'townhouse', 'detached', 'semi-detached', 'terrace']:
         return 'House'
     else:
         return 'Other'
@@ -93,6 +95,16 @@ def get_ber_category(ber_rating):
         return 'G'
     else:
         return 'Unknown'
+    
+def get_size_category(size):
+    if size < 50:
+        return 'Small'
+    elif 50 <= size < 100:
+        return 'Medium'
+    elif 100 <= size < 150:
+        return 'Large'
+    else:
+        return 'Very Large'    
 
 def haversine_distance(lat1, lon1, lat2, lon2):
     """
@@ -233,6 +245,16 @@ def calculate_nearby_metrics(nearby_properties, radius):
     
     return metrics
 
+def ber_to_numeric(ber):
+    """
+    Convert BER rating to a numeric value.
+    A1 is the best (highest value), G is the worst (lowest value).
+    """
+    ber_order = ['A1', 'A2', 'A3', 'B1', 'B2', 'B3', 'C1', 'C2', 'C3', 'D1', 'D2', 'E1', 'E2', 'F', 'G']
+    if pd.isna(ber) or ber == '--' or ber not in ber_order:
+        return np.nan
+    return float(len(ber_order) - ber_order.index(ber))
+
 def generate_columns(data):
     try:
         logging.info("Starting generate_columns function.")
@@ -254,6 +276,7 @@ def generate_columns(data):
         energy_rating = data.get('energy_rating', '')
         latitude = data.get('latitude')
         longitude = data.get('longitude')
+        size = data.get('size', '0')
         logging.info(f"Input property coordinates: Lat {latitude}, Long {longitude}")
 
         # Validate essential fields
@@ -270,6 +293,12 @@ def generate_columns(data):
             'latitude': latitude,
             'longitude': longitude,
         }
+
+        try:
+            size = float(size)
+            result['size_category'] = get_size_category(size)
+        except ValueError:
+            result['size_category'] = 'Unknown'
 
         # Fetch nearby properties and calculate metrics for 1km, 3km, and 5km
         if latitude is not None and longitude is not None:
@@ -293,6 +322,9 @@ def generate_columns(data):
             for radius in [1, 3, 5]:
                 result[f'nearby_properties_count_within_{radius}km'] = 0
 
+        # Convert BER rating to numeric value
+        result['energy_rating_numeric'] = ber_to_numeric(energy_rating)
+
         logging.info("Finished generate_columns function.")
         logging.debug(f"Generated result: {result}")
         return result
@@ -300,6 +332,16 @@ def generate_columns(data):
         logging.error(f"Error in generate_columns: {str(e)}")
         logging.error(traceback.format_exc())
         raise
+
+def replace_nan_with_none(data):
+    if isinstance(data, dict):
+        return {k: replace_nan_with_none(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [replace_nan_with_none(item) for item in data]
+    elif isinstance(data, float) and np.isnan(data):
+        return None
+    else:
+        return data
 
 def main():
     try:
@@ -325,6 +367,9 @@ def main():
 
         # Generate columns based on input data
         result = generate_columns(input_json)
+
+        # Replace NaN with None in the result
+        result = replace_nan_with_none(result)
 
         # Output the result as JSON
         output_json = json.dumps(result)

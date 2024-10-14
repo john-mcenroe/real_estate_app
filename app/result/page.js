@@ -30,7 +30,7 @@ function ResultComponent() {
     beds: searchParams.get("beds") || "",
     baths: searchParams.get("baths") || "",
     size: searchParams.get("size") || "",
-    property_type: searchParams.get("property_type") || "", // Ensure this is included
+    property_type: searchParams.get("property_type") || "",
     ber_rating: searchParams.get("ber_rating") || "",
   });
 
@@ -64,6 +64,18 @@ function ResultComponent() {
     e.preventDefault();
     setFilters(tempFilters);
     updateURL(tempFilters);
+    // Reset states before fetching new data
+    setState({
+      properties: [],
+      loading: true,
+      medianPrice: null,
+      confidenceBands: null,
+      error: null,
+    });
+    setGeneratedColumns(null);
+    setXgboostPrediction(null);
+    // Trigger a new fetch
+    fetchProperties();
   };
 
   // Update URL search parameters based on filters
@@ -83,16 +95,15 @@ function ResultComponent() {
   const fetchProperties = useCallback(async () => {
     setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
-      // Ensure lat and lng are available
       if (!lat || !lng) {
         throw new Error("Latitude and longitude are required");
       }
 
-      console.log("Fetching properties with filters:", filters); // Debugging Log
+      console.log("Fetching properties with filters:", filters);
 
       // Fetch properties from Supabase
       const { data: properties, error } = await supabase
-        .from("scraped_property_data_v1") // Updated table name
+        .from("scraped_property_data_v1")
         .select(`
           id,
           latitude,
@@ -150,6 +161,19 @@ function ResultComponent() {
         size,
         property_type,
         ber_rating,
+        latitude: lat,
+        longitude: lng,
+      });
+
+      console.log("About to call generate_columns API");
+      console.log("Data being sent:", {
+        beds,
+        baths,
+        size,
+        property_type,
+        ber_rating,
+        latitude: lat,
+        longitude: lng,
       });
 
       // Call the serverless function to generate additional columns
@@ -165,7 +189,7 @@ function ResultComponent() {
           property_type,
           ber_rating,
           latitude: lat,
-          longitude: lng, 
+          longitude: lng,
         }),
       });
 
@@ -181,13 +205,38 @@ function ResultComponent() {
       console.log("Generated columns data:", generatedColumnsData);
       setGeneratedColumns(generatedColumnsData);
 
+      console.log("About to call predict API");
+      console.log("Data being sent to predict:", {
+        originalInputs: {
+          property_type,
+          size,
+          ber_rating,
+          latitude: lat,
+          longitude: lng,
+          beds,
+          baths,
+        },
+        ...generatedColumnsData,
+      });
+
       // Call the XGBoost prediction API
       const predictionResponse = await fetch("/api/predict", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(generatedColumnsData),
+        body: JSON.stringify({
+          originalInputs: {
+            property_type,
+            size,
+            ber_rating,
+            latitude: lat,
+            longitude: lng,
+            beds,
+            baths,
+          },
+          ...generatedColumnsData,
+        }),
       });
 
       if (!predictionResponse.ok) {
@@ -199,18 +248,15 @@ function ResultComponent() {
       }
 
       const predictionResult = await predictionResponse.json();
-      console.log("XGBoost prediction result:", predictionResult);
+      console.log("Received prediction:", predictionResult.prediction);
+      console.log("Setting new prediction:", predictionResult.prediction);
       setXgboostPrediction(predictionResult.prediction);
-
-      // Assuming generatedColumnsData contains necessary additional data
-      const inputPropertyWithAdditionalColumns = generatedColumnsData;
 
       // Calculate similarity scores
       const propertiesWithSimilarity = filtered
-        .map((property) => calculateSimilarity(property, inputPropertyWithAdditionalColumns))
+        .map((property) => calculateSimilarity(property, generatedColumnsData))
         .filter((p) => p.categoryScore > 0)
         .sort((a, b) => {
-          // Higher categoryScore is better; if equal, closer distance is better
           if (b.categoryScore !== a.categoryScore) {
             return b.categoryScore - a.categoryScore;
           }
@@ -238,14 +284,12 @@ function ResultComponent() {
       setState((prev) => ({
         ...prev,
         properties: propertiesWithSimilarity,
-        medianPrice: topPrices.length ? calculateMedian(topPrices) : null,
-        confidenceBands: topPrices.length
-          ? calculateConfidenceBands(topPrices)
-          : { lowerQuartile: null, upperQuartile: null },
+        medianPrice: null, // Removed, as we're using xgboostPrediction
+        confidenceBands: null, // Removed
         loading: false,
       }));
     } catch (err) {
-      console.error("Error fetching properties:", err);
+      console.error("Error in fetchProperties:", err);
       setState((prev) => ({
         ...prev,
         error: err.message || "An unexpected error occurred.",
@@ -265,6 +309,10 @@ function ResultComponent() {
       }));
     }
   }, [filters, fetchProperties]);
+
+  useEffect(() => {
+    console.log("xgboostPrediction updated:", xgboostPrediction);
+  }, [xgboostPrediction]);
 
   if (state.loading) {
     return <div className="text-center">Loading properties...</div>;
@@ -417,19 +465,10 @@ function ResultComponent() {
           {/* Price Estimate */}
           <div className="bg-gray-100 p-6 rounded-lg shadow-md">
             <h2 className="text-lg font-semibold mb-4">Price Estimate</h2>
-            {state.medianPrice !== null ? (
-              <>
-                <p className="text-2xl font-bold text-green-500">
-                  €{state.medianPrice.toLocaleString()}
-                </p>
-                {state.confidenceBands.lowerQuartile !== null &&
-                  state.confidenceBands.upperQuartile !== null && (
-                    <p className="text-sm text-gray-500 mt-2">
-                      50% confidence range: €{state.confidenceBands.lowerQuartile.toLocaleString()} - €
-                      {state.confidenceBands.upperQuartile.toLocaleString()}
-                    </p>
-                  )}
-              </>
+            {xgboostPrediction !== null ? (
+              <p className="text-2xl font-bold text-green-500">
+                €{xgboostPrediction?.toLocaleString(undefined, { maximumFractionDigits: 2 }) || 'N/A'}
+              </p>
             ) : (
               <p className="text-gray-700">No valuation data available.</p>
             )}
@@ -523,18 +562,7 @@ function ResultComponent() {
         </div>
       )}
 
-      {/* Display XGBoost Prediction */}
-      {xgboostPrediction !== null && (
-        <div className="mt-8 bg-white p-6 rounded-lg shadow-md">
-          <h2 className="text-xl font-semibold mb-4">XGBoost Prediction</h2>
-          <p className="text-2xl font-bold text-green-500">
-            €{xgboostPrediction.toLocaleString()}
-          </p>
-          <p className="text-sm text-gray-500 mt-2">
-            This is the predicted price based on the XGBoost model.
-          </p>
-        </div>
-      )}
+      {/* Removed XGBoost Prediction Section as it's now in "Price Estimate" */}
     </div>
   );
 }
