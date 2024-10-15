@@ -13,9 +13,27 @@ def load_model(model_path):
     try:
         model = joblib.load(model_path)
         logging.info("XGBoost model loaded successfully.")
+        
+        # Check if the model is a Pipeline or ColumnTransformer
+        if hasattr(model, 'transform') and callable(getattr(model, 'transform')):
+            # If it's a ColumnTransformer, we need to extract the feature names from the transformers
+            feature_names = []
+            for name, transformer, columns in model.transformers_:
+                if hasattr(transformer, 'get_feature_names_out'):
+                    feature_names.extend(transformer.get_feature_names_out(columns))
+                else:
+                    feature_names.extend(columns)  # Use original column names if no feature names are available
+            
+            model.feature_names_in_ = feature_names  # Set the feature names in the model
+            
+            # Create a small dummy dataset to fit the model
+            dummy_data = pd.DataFrame({col: [0] for col in feature_names})
+            model.fit(dummy_data, [0])  # Fit with dummy data
+            logging.info("Model fitted with dummy data to ensure all transformers are ready.")
+        
         return model
     except Exception as e:
-        logging.error(f"Failed to load the model: {e}")
+        logging.error(f"Failed to load or prepare the model: {e}")
         raise
 
 def prepare_features(data):
@@ -60,6 +78,12 @@ def prepare_features(data):
                 value = data.get(feature_name, 0)
                 features[feature_name] = value
                 logging.debug(f"Feature {feature_name}: {value}")
+            
+            # Add most common BER rating feature
+            ber_feature_name = f'most_common_ber_rating_within_{radius}km'
+            ber_value = data.get(ber_feature_name, 'Unknown')
+            features[ber_feature_name] = ber_value
+            logging.debug(f"Feature {ber_feature_name}: {ber_value}")
         
         df = pd.DataFrame([features])
         
@@ -108,6 +132,12 @@ def main():
                 logging.warning(f"Missing features: {missing_features}")
             if extra_features:
                 logging.warning(f"Extra features that will be ignored: {extra_features}")
+
+            # Ensure features_df has all required features in the correct order
+            for feature in model.feature_names_in_:
+                if feature not in features_df.columns:
+                    features_df[feature] = 0  # or some appropriate default value
+            features_df = features_df[model.feature_names_in_]
 
         predictions = model.predict(features_df)
         logging.info(f"Prediction result: {predictions}")

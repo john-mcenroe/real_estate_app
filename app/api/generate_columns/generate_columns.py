@@ -311,16 +311,26 @@ def generate_columns(data):
                     if nearby_props:
                         nearby_metrics = calculate_nearby_metrics(nearby_props, radius)
                         result.update(nearby_metrics)
+                        
+                        # Calculate most common BER rating
+                        ber_ratings = [prop['energy_rating'] for prop in nearby_props if prop.get('energy_rating')]
+                        if ber_ratings:
+                            result[f'most_common_ber_rating_within_{radius}km'] = max(set(ber_ratings), key=ber_ratings.count)
+                        else:
+                            result[f'most_common_ber_rating_within_{radius}km'] = 'Unknown'
                     else:
                         logging.warning(f"No nearby properties found within {radius}km to calculate metrics.")
+                        result[f'most_common_ber_rating_within_{radius}km'] = 'Unknown'
             except ValueError:
                 logging.error(f"Invalid latitude or longitude: {latitude}, {longitude}")
                 for radius in [1, 3, 5]:
                     result[f'nearby_properties_count_within_{radius}km'] = 0
+                    result[f'most_common_ber_rating_within_{radius}km'] = 'Unknown'
         else:
             logging.warning("Latitude or longitude is missing, skipping nearby properties calculation.")
             for radius in [1, 3, 5]:
                 result[f'nearby_properties_count_within_{radius}km'] = 0
+                result[f'most_common_ber_rating_within_{radius}km'] = 'Unknown'
 
         # Convert BER rating to numeric value
         result['energy_rating_numeric'] = ber_to_numeric(energy_rating)
