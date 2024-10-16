@@ -434,7 +434,7 @@ function ResultComponent() {
           <div className="bg-gray-100 p-6 rounded-lg shadow-md">
             <h2 className="text-lg font-semibold mb-4">Price Estimate</h2>
             {xgboostPrediction !== null ? (
-              <p className="text-2xl font-bold text-green-500">
+              <p className="text-3xl font-bold text-green-500"> {/* Changed from text-2xl to text-3xl */}
                 €{xgboostPrediction?.toLocaleString(undefined, { maximumFractionDigits: 2 }) || 'N/A'}
               </p>
             ) : (
