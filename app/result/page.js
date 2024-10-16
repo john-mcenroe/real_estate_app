@@ -291,7 +291,7 @@ function ResultComponent() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-6">
+    <div className="container mx-auto px-4 py-6 bg-gradient-to-b from-gray-100 to-white">
       {/* Modal Component */}
       <Modal
         isModalOpen={isModalOpen}
@@ -301,17 +301,17 @@ function ResultComponent() {
       />
 
       {/* Filters Form */}
-      <form onSubmit={handleRecalculate}>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <form onSubmit={handleRecalculate} className="mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* House Details */}
-          <div className="bg-gray-100 p-6 rounded-lg shadow-md">
-            <h2 className="text-lg font-semibold mb-4">House Details</h2>
+          <div className="bg-gradient-to-b from-blue-50 to-blue-100 p-6 rounded-lg shadow-md border border-blue-200">
+            <h2 className="text-2xl font-bold mb-4 text-gray-800">House Details</h2>
             {filters.address ? (
               <div>
-                <p>
+                <p className="text-gray-700 mb-4">
                   <strong>Address:</strong> {filters.address}
                 </p>
-                <div className="mt-4 flex flex-wrap items-end space-x-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                   {/* Beds Input */}
                   <div className="flex flex-col">
                     <label htmlFor="beds" className="block text-xs font-medium text-gray-600">
@@ -414,10 +414,10 @@ function ResultComponent() {
                     </select>
                   </div>
                   {/* Recalculate Button */}
-                  <div className="mt-6 sm:mt-0">
+                  <div className="mt-6">
                     <button
                       type="submit"
-                      className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      className="px-6 py-3 bg-gradient-to-r from-blue-400 to-blue-600 text-white rounded-md hover:from-blue-500 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 transition duration-300 ease-in-out shadow-md hover:shadow-lg"
                       disabled={state.loading}
                     >
                       Recalculate
@@ -431,12 +431,17 @@ function ResultComponent() {
           </div>
 
           {/* Price Estimate */}
-          <div className="bg-gray-100 p-6 rounded-lg shadow-md">
-            <h2 className="text-lg font-semibold mb-4">Price Estimate</h2>
-            {xgboostPrediction !== null ? (
-              <p className="text-3xl font-bold text-green-500"> {/* Changed from text-2xl to text-3xl */}
-                €{xgboostPrediction?.toLocaleString(undefined, { maximumFractionDigits: 2 }) || 'N/A'}
-              </p>
+          <div className="bg-gradient-to-b from-blue-50 to-blue-100 p-6 rounded-lg shadow-md border border-blue-200">
+            <h2 className="text-2xl font-bold mb-4 text-gray-800">Price Estimate</h2>
+            {xgboostPrediction !== null && !isNaN(xgboostPrediction) ? (
+              <>
+                <p className="text-5xl font-extrabold text-green-500 mb-2 shadow-sm">
+                  {formatCurrency(Math.round(xgboostPrediction / 10000) * 10000)}
+                </p>
+                <p className="text-xl text-gray-700">
+                  Range: {formatCurrency(Math.round((xgboostPrediction * 0.9) / 10000) * 10000)} - {formatCurrency(Math.round((xgboostPrediction * 1.2) / 10000) * 10000)}
+                </p>
+              </>
             ) : (
               <p className="text-gray-700">No valuation data available.</p>
             )}
@@ -446,72 +451,51 @@ function ResultComponent() {
 
       {/* Results Section */}
       <div className="mt-8">
-        <h2 className="text-xl font-semibold mb-4">Recently Sold Nearby</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <h2 className="text-3xl font-bold mb-6 text-gray-800">Recently Sold Nearby</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {state.properties.length ? (
             state.properties.map((property, index) => (
-              <div key={index} className="border p-4 rounded-lg shadow-md bg-white">
-                <p className="font-semibold text-blue-600 hover:underline">
-                  {property.myhome_link ? (
-                    <a
-                      href={property.myhome_link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-500 underline"
-                    >
-                      {property.address}
-                    </a>
-                  ) : (
-                    property.address
-                  )}
-                </p>
-                <p className="text-sm text-gray-500 mt-1">
-                  Distance from your location: {property.distance?.toFixed(2) || "N/A"} km
-                </p>
-                <div className="flex justify-between mt-3">
-                  <div>
-                    <p className="text-sm">
-                      <strong>Price Sold:</strong> €{Number(property.sale_price).toLocaleString("en-IE")}
-                    </p>
-                    <p className="text-sm">
-                      <strong>Date Sold:</strong>{" "}
-                      {property.sale_date
-                        ? new Date(property.sale_date).toLocaleDateString()
-                        : "N/A"}
-                    </p>
+              <div key={index} className="group h-full">
+                <a
+                  href={property.myhome_link || '#'}
+                  target={property.myhome_link ? "_blank" : ""}
+                  rel={property.myhome_link ? "noopener noreferrer" : ""}
+                  className={`block bg-white p-6 rounded-lg shadow-md hover:shadow-xl transition duration-300 ease-in-out h-full flex flex-col ${
+                    property.myhome_link ? 'cursor-pointer' : 'cursor-default'
+                  }`}
+                >
+                  <p className="font-semibold text-blue-600 group-hover:underline mb-2 text-lg">
+                    {property.address}
+                  </p>
+                  <p className="text-sm text-gray-600 mb-2">
+                    Distance: {property.distance?.toFixed(2) || "N/A"} km
+                  </p>
+                  <div className="flex justify-between mb-4 flex-grow">
+                    <div>
+                      <p className="text-2xl font-bold text-blue-600">
+                        €{Number(property.sale_price).toLocaleString("en-IE")}
+                      </p>
+                      <p className="text-sm text-gray-700">
+                        Sold: {property.sale_date ? new Date(property.sale_date).toLocaleDateString() : "N/A"}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-base text-gray-600">
+                        €{Number(property.asking_price).toLocaleString("en-IE")}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Listed: {property.first_list_date ? new Date(property.first_list_date).toLocaleDateString() : "N/A"}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm">
-                      <strong>Price Asked:</strong>{" "}
-                      {property.asking_price
-                        ? `€${Number(property.asking_price).toLocaleString("en-IE")}`
-                        : "N/A"}
-                    </p>
-                    <p className="text-sm">
-                      <strong>First List Date:</strong>{" "}
-                      {property.first_list_date
-                        ? new Date(property.first_list_date).toLocaleDateString()
-                        : "N/A"}
-                    </p>
+                  {/* Property Details */}
+                  <div className="grid grid-cols-2 gap-2 text-sm text-gray-700">
+                    <p><strong>Beds:</strong> {property.beds}</p>
+                    <p><strong>Baths:</strong> {property.baths}</p>
+                    <p><strong>BER:</strong> {property.energy_rating || "N/A"}</p>
+                    <p><strong>Size:</strong> {property.myhome_floor_area_value} m²</p>
                   </div>
-                </div>
-                {/* Updated Property Details */}
-                <div className="grid grid-cols-2 gap-2 mt-3 text-sm text-gray-700">
-                  {/* Beds */}
-                  <p>
-                    <strong>Beds:</strong> {property.beds}
-                  </p>
-                  {/* Baths */}
-                  <p>
-                    <strong>Baths:</strong> {property.baths}
-                  </p>
-                  <p>
-                    <strong>BER:</strong> {property.energy_rating || "N/A"}
-                  </p>
-                  <p>
-                    <strong>Size:</strong> {property.myhome_floor_area_value} m²
-                  </p>
-                </div>
+                </a>
               </div>
             ))
           ) : (
@@ -529,4 +513,18 @@ export default function ResultPage() {
       <ResultComponent />
     </Suspense>
   );
+}
+
+// Add this function at the end of your component or in a separate utils file
+function formatCurrency(value) {
+  if (isNaN(value) || value === null) return '€0';
+  
+  const absValue = Math.abs(value);
+  if (absValue >= 1000000) {
+    return `€${(value / 1000000).toFixed(2)}M`;
+  } else if (absValue >= 1000) {
+    return `€${(value / 1000).toFixed(0)}K`;
+  } else {
+    return `€${value.toFixed(0)}`;
+  }
 }
