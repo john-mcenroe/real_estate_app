@@ -1,4 +1,3 @@
-import sys
 import json
 import logging
 import os
@@ -9,29 +8,26 @@ from supabase import create_client, Client
 from statistics import median, mode
 import pandas as pd
 import numpy as np
+from flask import jsonify
 
-# Load environment variables from .env.local
-load_dotenv(".env.local")
+# Configure logging
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Configure logging to stderr
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    stream=sys.stderr
-)
+# Load environment variables
+load_dotenv()
 
 # Fetch Supabase credentials from environment variables
-SUPABASE_URL = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
-SUPABASE_ANON_KEY = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
-
-if not SUPABASE_URL or not SUPABASE_ANON_KEY:
-    logging.error("Supabase credentials are missing in the environment variables.")
-    print(json.dumps({"error": "Supabase credentials are missing in the environment variables."}))
-    sys.exit(1)
-
-# Ensure SUPABASE_URL starts with 'https://'
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+if not SUPABASE_URL:
+    logging.error("SUPABASE_URL is missing in the environment variables.")
+    raise ValueError("SUPABASE_URL is missing in the environment variables.")
 if not SUPABASE_URL.startswith('https://'):
     SUPABASE_URL = 'https://' + SUPABASE_URL
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
+
+if not SUPABASE_ANON_KEY:
+    logging.error("Supabase credentials are missing in the environment variables.")
+    raise ValueError("Supabase credentials are missing in the environment variables.")
 
 # Initialize Supabase client
 try:
@@ -39,8 +35,7 @@ try:
     logging.info("Successfully connected to Supabase.")
 except Exception as e:
     logging.error(f"Failed to connect to Supabase: {e}")
-    print(json.dumps({"error": "Failed to connect to Supabase."}))
-    sys.exit(1)
+    raise
 
 def get_property_type_category(property_type):
     if not property_type:
@@ -345,7 +340,7 @@ def generate_columns(data):
     except Exception as e:
         logging.error(f"Error in generate_columns: {str(e)}")
         logging.error(traceback.format_exc())
-        raise
+        return {"error": str(e)}  # Return an error dict instead of raising
 
 def replace_nan_with_none(data):
     if isinstance(data, dict):
@@ -357,44 +352,39 @@ def replace_nan_with_none(data):
     else:
         return data
 
-def main():
+def main(request):
     try:
-        logging.debug("Python script started")
-        logging.debug(f"Current working directory: {os.getcwd()}")
-
-        # Read JSON data from stdin
-        input_data = sys.stdin.read()
-        if not input_data:
-            logging.error("No input JSON provided via stdin")
-            print(json.dumps({"error": "No input data provided"}))
-            sys.exit(1)
-
-        logging.debug(f"Received JSON input: {input_data}")
-
-        try:
-            input_json = json.loads(input_data)
-            logging.debug(f"Parsed input JSON: {input_json}")
-        except json.JSONDecodeError as e:
-            logging.error(f"Error decoding JSON input: {str(e)}")
-            print(json.dumps({"error": f"Invalid JSON input: {str(e)}"}))
-            sys.exit(1)
-
-        # Generate columns based on input data
-        result = generate_columns(input_json)
-
-        # Replace NaN with None in the result
-        result = replace_nan_with_none(result)
-
-        # Output the result as JSON
-        output_json = json.dumps(result)
-        logging.debug(f"Output JSON: {output_json}")
-        print(output_json)
-
+        logging.debug("Function started")
+        request_json = request.get_json(silent=True)
+        logging.debug(f"Received request: {request_json}")
+        
+        if request_json and 'data' in request_json:
+            result = generate_columns(request_json['data'])
+            return jsonify(result), 200
+        else:
+            return jsonify({"error": "Invalid input"}), 400
     except Exception as e:
-        logging.error(f"Error in main execution: {str(e)}")
+        logging.error(f"Error in main function: {str(e)}")
         logging.error(traceback.format_exc())
-        print(json.dumps({"error": str(e)}))
-        sys.exit(1)
+        return jsonify({"error": str(e)}), 500
 
+# For local testing
 if __name__ == "__main__":
-    main()
+    class MockRequest:
+        def __init__(self, json_data):
+            self.json_data = json_data
+        def get_json(self, silent=False):
+            return self.json_data
+
+    test_data = {"data": {
+        "address": "123 Test St",
+        "beds": "2",
+        "baths": "1",
+        "property_type": "apartment",
+        "energy_rating": "B2",
+        "latitude": "53.3498",
+        "longitude": "-6.2603",
+        "size": "75"
+    }}
+    mock_request = MockRequest(test_data)
+    print(main(mock_request))

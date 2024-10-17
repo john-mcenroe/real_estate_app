@@ -1,69 +1,53 @@
 // page.js
 
 import { NextResponse } from 'next/server';
-import { spawn } from 'child_process';
-import path from 'path';
+
+const API_URL = process.env.GOOGLE_CLOUD_API_URL;
 
 export async function POST(req) {
   try {
     const data = await req.json();
-    console.log('Received data in API route:', data);
+    console.log('Received data in /generate_columns API route:', JSON.stringify(data, null, 2));
 
-    return new Promise((resolve, reject) => {
-      // Ensure the path to the Python script is correct
-      const scriptPath = path.join(process.cwd(), 'app/api/generate_columns/generate_columns.py');
-      console.log('Spawning Python process with script:', scriptPath);
+    if (!API_URL) {
+      throw new Error('GOOGLE_CLOUD_API_URL is not set in environment variables');
+    }
 
-      // Use 'python3' to ensure the correct Python version is used
-      const pythonProcess = spawn('python3', [scriptPath], {
-        env: {
-          ...process.env,
-          NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-        },
-        // Optionally, set a timeout (e.g., 10 seconds)
-        // timeout: 10000,
-      });
-
-      let result = '';
-      let error = '';
-
-      // Capture standard output from the Python script
-      pythonProcess.stdout.on('data', (data) => {
-        console.log('Python stdout:', data.toString());
-        result += data.toString();
-      });
-
-      // Capture standard error from the Python script
-      pythonProcess.stderr.on('data', (data) => {
-        console.error('Python stderr:', data.toString());
-        error += data.toString();
-      });
-
-      // Handle process exit
-      pythonProcess.on('close', (code) => {
-        console.log(`Python process exited with code ${code}`);
-        if (code !== 0) {
-          console.error(`Python script error: ${error}`);
-          reject(new Error(`Python script exited with code ${code}: ${error}`));
-        } else {
-          try {
-            // Attempt to parse the Python script's output as JSON
-            const parsedResult = JSON.parse(result);
-            resolve(NextResponse.json(parsedResult));
-          } catch (e) {
-            console.error(`Failed to parse Python script output: ${result}`);
-            reject(new Error(`Failed to parse Python script output: ${e.message}`));
-          }
-        }
-      });
-
-      // Send JSON data to the Python script via stdin
-      pythonProcess.stdin.write(JSON.stringify(data));
-      pythonProcess.stdin.end();
+    console.log('Sending request to:', API_URL);
+    const response = await fetch(`${API_URL}/generate_columns`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    }).catch(error => {
+      console.error('Fetch error:', error);
+      throw new Error(`Fetch failed: ${error.message}`);
     });
+
+    console.log('Response status:', response.status);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Error response:', errorText);
+      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+    }
+
+    const resultText = await response.text();
+    console.log('Raw response from Flask:', resultText);
+
+    let result;
+    try {
+      result = JSON.parse(resultText);
+    } catch (parseError) {
+      console.error('Error parsing JSON:', parseError);
+      throw new Error(`Failed to parse JSON response: ${resultText}`);
+    }
+
+    console.log('Parsed result:', JSON.stringify(result, null, 2));
+
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Error in generate_columns API route:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
