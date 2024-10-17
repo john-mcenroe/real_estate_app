@@ -254,6 +254,16 @@ def ber_to_numeric(ber):
         return np.nan
     return float(len(ber_order) - ber_order.index(ber))
 
+def replace_nan_with_none(data):
+    if isinstance(data, dict):
+        return {k: replace_nan_with_none(v) for k, v in data.items() if not pd.isna(v)}
+    elif isinstance(data, list):
+        return [replace_nan_with_none(item) for item in data if not pd.isna(item)]
+    elif pd.isna(data):
+        return None
+    else:
+        return data
+
 def generate_columns(data):
     try:
         logging.info("Starting generate_columns function.")
@@ -334,6 +344,9 @@ def generate_columns(data):
         # Convert BER rating to numeric value
         result['energy_rating_numeric'] = ber_to_numeric(energy_rating)
 
+        # Remove NaN values
+        result = replace_nan_with_none(result)
+
         logging.info("Finished generate_columns function.")
         logging.debug(f"Generated result: {result}")
         return result
@@ -341,16 +354,6 @@ def generate_columns(data):
         logging.error(f"Error in generate_columns: {str(e)}")
         logging.error(traceback.format_exc())
         return {"error": str(e)}  # Return an error dict instead of raising
-
-def replace_nan_with_none(data):
-    if isinstance(data, dict):
-        return {k: replace_nan_with_none(v) for k, v in data.items()}
-    elif isinstance(data, list):
-        return [replace_nan_with_none(item) for item in data]
-    elif isinstance(data, float) and np.isnan(data):
-        return None
-    else:
-        return data
 
 def main(request):
     try:
