@@ -1,7 +1,8 @@
 import os
 import json
 import logging
-from flask import Flask, request, jsonify
+import traceback
+from flask import Flask, request, jsonify, Response, make_response
 import functions_framework
 from generate_columns import generate_columns
 from predict import predict
@@ -10,7 +11,7 @@ import numpy as np
 app = Flask(__name__)
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 class NumpyEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -20,38 +21,84 @@ class NumpyEncoder(json.JSONEncoder):
             return float(obj)
         elif isinstance(obj, np.ndarray):
             return obj.tolist()
-        elif np.isnan(obj):
-            return None
+        elif isinstance(obj, (dict, list)):
+            return json.dumps(obj)
         return super(NumpyEncoder, self).default(obj)
+
+def is_json_serializable(value):
+    """Check if a value is JSON serializable."""
+    return isinstance(value, (str, int, float, bool, type(None)))
+
+def filter_json_serializable(data):
+    """Recursively filter out non-JSON-serializable values from a dictionary."""
+    if isinstance(data, dict):
+        return {k: filter_json_serializable(v) for k, v in data.items() if is_json_serializable(v) or isinstance(v, (dict, list))}
+    elif isinstance(data, list):
+        return [filter_json_serializable(item) for item in data if is_json_serializable(item) or isinstance(item, (dict, list))]
+    else:
+        return data
 
 @functions_framework.http
 def python_api(request):
-    """HTTP Cloud Function entry point."""
-    return app(request.environ, lambda x, y: [])
+    with app.app_context():
+        if request.path == '/generate_columns':
+            return generate_columns_api(request)
+        elif request.path == '/predict':
+            return predict_api(request)
+        elif request.path == '/':
+            return health_check(request)
+        else:
+            return jsonify({"error": "Not Found"}), 404
 
-@app.route('/generate_columns', methods=['POST'])
-def generate_columns_api():
+def generate_columns_api(request):
     try:
         data = request.get_json()
+        logging.info(f"Received data: {data}")
+        
         result = generate_columns(data)
-        return json.dumps(result, cls=NumpyEncoder), 200, {'Content-Type': 'application/json'}
+        
+        logging.info("Raw output from generate_columns:")
+        logging.info(result)
+        
+        # Ensure the result is JSON serializable
+        json_safe_result = json.loads(json.dumps(result, default=str))
+        
+        logging.info("JSON-safe result:")
+        logging.info(json_safe_result)
+        
+        return jsonify(json_safe_result)
+
     except Exception as e:
+        logging.error(f"Error in generate_columns: {str(e)}")
+        logging.error(traceback.format_exc())
         return jsonify({"error": str(e)}), 500
 
-@app.route('/predict', methods=['POST'])
-def predict_api():
+def predict_api(request):
     try:
         data = request.get_json()
         if not data:
             return jsonify({"error": "No input data provided"}), 400
         result = predict(data)
-        return jsonify(result)
+        
+        # Print raw output
+        logging.info("Raw output from predict:")
+        logging.info(result)
+        
+        # Try to serialize to JSON
+        try:
+            json_result = json.dumps(result, cls=NumpyEncoder)
+            logging.info("JSON serialization successful")
+        except Exception as json_error:
+            logging.error(f"JSON serialization failed: {str(json_error)}")
+            return jsonify({"error": "Failed to serialize result"}), 500
+        
+        return Response(json_result, mimetype='application/json')
     except Exception as e:
-        logging.exception(f"Error in predict: {str(e)}")
+        logging.error(f"Error in predict: {str(e)}")
+        logging.error(traceback.format_exc())
         return jsonify({"error": str(e)}), 500
 
-@app.route('/', methods=['GET'])
-def health_check():
+def health_check(request):
     return jsonify({"status": "healthy"}), 200
 
 if __name__ == "__main__":

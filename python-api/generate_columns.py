@@ -254,15 +254,18 @@ def ber_to_numeric(ber):
         return np.nan
     return float(len(ber_order) - ber_order.index(ber))
 
-def replace_nan_with_none(data):
-    if isinstance(data, dict):
-        return {k: replace_nan_with_none(v) for k, v in data.items() if not pd.isna(v)}
-    elif isinstance(data, list):
-        return [replace_nan_with_none(item) for item in data if not pd.isna(item)]
-    elif pd.isna(data):
+def replace_nan(obj):
+    """
+    Recursively replace NaN values with None in dictionaries and lists.
+    """
+    if isinstance(obj, float) and math.isnan(obj):
         return None
+    elif isinstance(obj, dict):
+        return {k: replace_nan(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [replace_nan(element) for element in obj]
     else:
-        return data
+        return obj
 
 def generate_columns(data):
     try:
@@ -345,7 +348,7 @@ def generate_columns(data):
         result['energy_rating_numeric'] = ber_to_numeric(energy_rating)
 
         # Remove NaN values
-        result = replace_nan_with_none(result)
+        result = replace_nan(result)
 
         logging.info("Finished generate_columns function.")
         logging.debug(f"Generated result: {result}")
@@ -355,7 +358,7 @@ def generate_columns(data):
         logging.error(traceback.format_exc())
         return {"error": str(e)}  # Return an error dict instead of raising
 
-def main(request):
+def python_api(request):
     try:
         logging.debug("Function started")
         request_json = request.get_json(silent=True)
@@ -363,11 +366,12 @@ def main(request):
         
         if request_json and 'data' in request_json:
             result = generate_columns(request_json['data'])
+            logging.debug(f"Generated result: {result}")
             return jsonify(result), 200
         else:
             return jsonify({"error": "Invalid input"}), 400
     except Exception as e:
-        logging.error(f"Error in main function: {str(e)}")
+        logging.error(f"Error in python_api: {str(e)}")
         logging.error(traceback.format_exc())
         return jsonify({"error": str(e)}), 500
 
@@ -390,4 +394,4 @@ if __name__ == "__main__":
         "size": "75"
     }}
     mock_request = MockRequest(test_data)
-    print(main(mock_request))
+    print(python_api(mock_request))
