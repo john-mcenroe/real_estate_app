@@ -97,7 +97,7 @@ def prepare_features(data):
 
 def predict(data):
     try:
-        model_path = os.path.join(os.path.dirname(__file__), 'xgboost_model.joblib')
+        model_path = os.path.join('/tmp', 'xgboost_model.joblib')
         model = load_model(model_path)
 
         features_df = prepare_features(data)

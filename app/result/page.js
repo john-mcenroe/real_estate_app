@@ -373,9 +373,9 @@ function ResultComponent() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* House Details */}
           <div className="bg-gradient-to-b from-blue-50 to-blue-100 p-6 rounded-lg shadow-md border border-blue-200">
-            <h2 className="text-2xl font-bold mb-4 text-gray-800">House Details</h2>
+            <h2 className="text-2xl font-bold mb-4 text-gray-800 text-left">House Details</h2>
             <div>
-              <div className="flex items-center mb-4">
+              <div className="flex items-center mb-4 justify-start">
                 {isEditing ? (
                   <input
                     ref={inputRef}
@@ -393,7 +393,7 @@ function ResultComponent() {
                   />
                 ) : (
                   <>
-                    <p className="text-gray-700 flex-grow">
+                    <p className="text-gray-700 flex-grow text-left">
                       <strong>Address:</strong> {filters.address}
                     </p>
                     <button
@@ -507,9 +507,9 @@ function ResultComponent() {
 
           {/* Price Estimate */}
           <div className="bg-gradient-to-b from-blue-50 to-blue-100 p-6 rounded-lg shadow-md border border-blue-200">
-            <h2 className="text-2xl font-bold mb-4 text-gray-800">Price Estimate</h2>
+            <h2 className="text-2xl font-bold mb-4 text-gray-800 text-center md:text-left">Price Estimate</h2>
             <div className="flex flex-col md:flex-row justify-between items-center">
-              <div className="w-full md:w-1/2 text-center md:text-left">
+              <div className="w-full md:w-1/2 text-center">
                 {xgboostPrediction !== null && !isNaN(xgboostPrediction) ? (
                   <>
                     <p className="text-5xl font-extrabold text-green-500 mb-2">
@@ -540,7 +540,7 @@ function ResultComponent() {
 
       {/* Results Section */}
       <div className="mt-8">
-        <h2 className="text-3xl font-bold mb-6 text-gray-800">Recently Sold Nearby</h2>
+        <h2 className="text-3xl font-bold mb-6 text-gray-800 text-center md:text-left">Recently Sold Nearby</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {state.properties.length ? (
             state.properties.map((property, index) => (
@@ -553,42 +553,40 @@ function ResultComponent() {
                     property.myhome_link ? 'cursor-pointer' : 'cursor-default'
                   }`}
                 >
-                  <p className="font-semibold text-blue-600 group-hover:underline mb-2 text-lg">
+                  <p className="font-semibold text-blue-600 group-hover:underline mb-2 text-lg text-center md:text-left">
                     {property.address}
                   </p>
-                  <p className="text-sm text-gray-600 mb-2">
+                  <p className="text-sm text-gray-600 mb-2 text-center md:text-left">
                     Distance: {property.distance?.toFixed(2) || "N/A"} km
                   </p>
-                  <div className="flex justify-between mb-4 flex-grow">
-                    <div>
-                      <p className="text-2xl font-bold text-blue-600">
-                        €{Number(property.sale_price).toLocaleString("en-IE")}
-                      </p>
-                      <p className="text-sm text-gray-700">
-                        Sold: {property.sale_date ? new Date(property.sale_date).toLocaleDateString() : "N/A"}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-base text-gray-600">
-                        €{Number(property.asking_price).toLocaleString("en-IE")}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        Listed: {property.first_list_date ? new Date(property.first_list_date).toLocaleDateString() : "N/A"}
-                      </p>
-                    </div>
+                  <div className="mb-4 text-center md:text-left">
+                    <p className="text-2xl font-bold text-blue-600">
+                      €{Number(property.sale_price).toLocaleString("en-IE")}
+                    </p>
+                    <p className="text-sm text-gray-700">
+                      Sold: {property.sale_date ? new Date(property.sale_date).toLocaleDateString() : "N/A"}
+                    </p>
+                  </div>
+                  <div className="mb-4 text-center md:text-left">
+                    <p className="text-lg text-gray-600">
+                      Listed: €{Number(property.asking_price).toLocaleString("en-IE")}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Date: {property.first_list_date ? new Date(property.first_list_date).toLocaleDateString() : "N/A"}
+                    </p>
                   </div>
                   {/* Property Details */}
                   <div className="grid grid-cols-2 gap-2 text-sm text-gray-700">
-                    <p><strong>Beds:</strong> {property.beds}</p>
-                    <p><strong>Baths:</strong> {property.baths}</p>
-                    <p><strong>BER:</strong> {property.energy_rating || "N/A"}</p>
-                    <p><strong>Size:</strong> {property.myhome_floor_area_value} m²</p>
+                    <p className="text-center md:text-left"><strong>Beds:</strong> {property.beds}</p>
+                    <p className="text-center md:text-left"><strong>Baths:</strong> {property.baths}</p>
+                    <p className="text-center md:text-left"><strong>BER:</strong> {property.energy_rating || "N/A"}</p>
+                    <p className="text-center md:text-left"><strong>Size:</strong> {property.myhome_floor_area_value} m²</p>
                   </div>
                 </a>
               </div>
             ))
           ) : (
-            <p className="text-gray-700">No properties found.</p>
+            <p className="text-gray-700 text-center md:text-left">No properties found.</p>
           )}
         </div>
       </div>
