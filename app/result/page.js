@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useEffect, useCallback } from "react";
+import { Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { supabase } from "../../libs/supabaseClient";
 import {
@@ -11,6 +11,8 @@ import {
   calculateSimilarity,
 } from "../utils";
 import Modal from "../../components/Modal";
+import { FaEdit } from 'react-icons/fa'; // Import the edit icon
+import Script from 'next/script';
 
 function ResultComponent() {
   const searchParams = useSearchParams();
@@ -62,8 +64,13 @@ function ResultComponent() {
   // Handle filter form submission
   const handleRecalculate = (e) => {
     e.preventDefault();
-    setFilters(tempFilters);
-    updateURL(tempFilters);
+    const newFilters = {
+      ...tempFilters,
+      address: tempAddress, // Use the tempAddress here
+    };
+    setFilters(newFilters);
+    updateURL(newFilters);
+    setIsEditing(false);
     // Reset states before fetching new data
     setState({
       properties: [],
@@ -282,6 +289,55 @@ function ResultComponent() {
     console.log("xgboostPrediction updated:", xgboostPrediction);
   }, [xgboostPrediction]);
 
+  const [isEditing, setIsEditing] = useState(false);
+  const [tempAddress, setTempAddress] = useState(filters.address);
+  const inputRef = useRef(null);
+  const autocompleteRef = useRef(null);
+
+  // Function to initialize Google Places Autocomplete
+  const initializeAutocomplete = () => {
+    if (window.google && inputRef.current) {
+      const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
+        types: ['address'],
+        componentRestrictions: { country: 'ie' },
+        fields: ['address_components', 'formatted_address', 'geometry'],
+      });
+
+      autocomplete.addListener('place_changed', () => {
+        const place = autocomplete.getPlace();
+        if (place.geometry) {
+          setTempAddress(place.formatted_address);
+          setTempFilters(prev => ({
+            ...prev,
+            address: place.formatted_address,
+            lat: place.geometry.location.lat(),
+            lng: place.geometry.location.lng(),
+          }));
+        }
+      });
+
+      autocompleteRef.current = autocomplete;
+    }
+  };
+
+  // Use effect to initialize autocomplete when editing starts
+  useEffect(() => {
+    if (isEditing) {
+      initializeAutocomplete();
+    }
+  }, [isEditing]);
+
+  const handleEditClick = () => {
+    setIsEditing(true);
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 0);
+  };
+
+  const handleAddressChange = (e) => {
+    setTempAddress(e.target.value);
+  };
+
   if (state.loading) {
     return <div className="text-center">Loading properties...</div>;
   }
@@ -292,6 +348,10 @@ function ResultComponent() {
 
   return (
     <div className="container mx-auto px-4 py-6 bg-gradient-to-b from-gray-100 to-white">
+      <Script
+        src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places&region=IE`}
+        strategy="afterInteractive"
+      />
       {/* Modal Component */}
       <Modal
         isModalOpen={isModalOpen}
@@ -306,109 +366,129 @@ function ResultComponent() {
           {/* House Details */}
           <div className="bg-gradient-to-b from-blue-50 to-blue-100 p-6 rounded-lg shadow-md border border-blue-200">
             <h2 className="text-2xl font-bold mb-4 text-gray-800">House Details</h2>
-            {filters.address && (
-              <div>
-                <p className="text-gray-700 mb-4">
-                  <strong>Address:</strong> {filters.address}
-                </p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-6">
-                  <div>
-                    <label htmlFor="beds" className="block text-xs font-medium text-gray-600 mb-1">Beds</label>
-                    <input
-                      type="number"
-                      id="beds"
-                      name="beds"
-                      min={1}
-                      max={10}
-                      step={1}
-                      value={tempFilters.beds}
-                      onChange={handleChange("beds")}
-                      className="w-full p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="baths" className="block text-xs font-medium text-gray-600 mb-1">Baths</label>
-                    <input
-                      type="number"
-                      id="baths"
-                      name="baths"
-                      min={1}
-                      max={10}
-                      step={1}
-                      value={tempFilters.baths}
-                      onChange={handleChange("baths")}
-                      className="w-full p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="size" className="block text-xs font-medium text-gray-600 mb-1">Size (m²)</label>
-                    <input
-                      type="number"
-                      id="size"
-                      name="size"
-                      min={10}
-                      max={1000}
-                      step={10}
-                      value={tempFilters.size}
-                      onChange={handleChange("size")}
-                      className="w-full p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="property_type" className="block text-xs font-medium text-gray-600 mb-1">Property Type</label>
-                    <select
-                      id="property_type"
-                      name="property_type"
-                      value={tempFilters.property_type}
-                      onChange={handleChange("property_type")}
-                      className="w-full p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
+            <div>
+              <div className="flex items-center mb-4">
+                {isEditing ? (
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={tempAddress}
+                    onChange={handleAddressChange}
+                    className="flex-grow p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter address"
+                  />
+                ) : (
+                  <>
+                    <p className="text-gray-700 flex-grow">
+                      <strong>Address:</strong> {filters.address}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleEditClick}
+                      className="ml-2 text-blue-600 hover:text-blue-800"
                     >
-                      <option value="">Select Type</option>
-                      <option value="house">House</option>
-                      <option value="apartment">Apartment</option>
-                      <option value="bungalow">Bungalow</option>
-                      <option value="cottage">Cottage</option>
-                      <option value="villa">Villa</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label htmlFor="ber_rating" className="block text-xs font-medium text-gray-600 mb-1">BER Rating</label>
-                    <select
-                      id="ber_rating"
-                      name="ber_rating"
-                      value={tempFilters.ber_rating}
-                      onChange={handleChange("ber_rating")}
-                      className="w-full p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="">Select Rating</option>
-                      <option value="A1">A1</option>
-                      <option value="A2">A2</option>
-                      <option value="A3">A3</option>
-                      <option value="B1">B1</option>
-                      <option value="B2">B2</option>
-                      <option value="B3">B3</option>
-                      <option value="C1">C1</option>
-                      <option value="C2">C2</option>
-                      <option value="C3">C3</option>
-                      <option value="D1">D1</option>
-                      <option value="D2">D2</option>
-                      <option value="E1">E1</option>
-                      <option value="E2">E2</option>
-                      <option value="F">F</option>
-                      <option value="G">G</option>
-                    </select>
-                  </div>
+                      <FaEdit />
+                    </button>
+                  </>
+                )}
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-6">
+                <div>
+                  <label htmlFor="beds" className="block text-xs font-medium text-gray-600 mb-1">Beds</label>
+                  <input
+                    type="number"
+                    id="beds"
+                    name="beds"
+                    min={1}
+                    max={10}
+                    step={1}
+                    value={tempFilters.beds}
+                    onChange={handleChange("beds")}
+                    className="w-full p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
+                  />
                 </div>
-                <div className="flex justify-center mt-6">
-                  <button
-                    type="submit"
-                    className="px-8 py-3 bg-gradient-to-r from-gray-200 to-gray-300 text-gray-700 rounded-md font-semibold text-lg shadow-md hover:shadow-lg hover:from-gray-300 hover:to-gray-400 transition duration-300 ring-2 ring-gray-200 ring-opacity-50"
+                <div>
+                  <label htmlFor="baths" className="block text-xs font-medium text-gray-600 mb-1">Baths</label>
+                  <input
+                    type="number"
+                    id="baths"
+                    name="baths"
+                    min={1}
+                    max={10}
+                    step={1}
+                    value={tempFilters.baths}
+                    onChange={handleChange("baths")}
+                    className="w-full p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="size" className="block text-xs font-medium text-gray-600 mb-1">Size (m²)</label>
+                  <input
+                    type="number"
+                    id="size"
+                    name="size"
+                    min={10}
+                    max={1000}
+                    step={10}
+                    value={tempFilters.size}
+                    onChange={handleChange("size")}
+                    className="w-full p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="property_type" className="block text-xs font-medium text-gray-600 mb-1">Property Type</label>
+                  <select
+                    id="property_type"
+                    name="property_type"
+                    value={tempFilters.property_type}
+                    onChange={handleChange("property_type")}
+                    className="w-full p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
                   >
-                    Recalculate
-                  </button>
+                    <option value="">Select Type</option>
+                    <option value="house">House</option>
+                    <option value="apartment">Apartment</option>
+                    <option value="bungalow">Bungalow</option>
+                    <option value="cottage">Cottage</option>
+                    <option value="villa">Villa</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="ber_rating" className="block text-xs font-medium text-gray-600 mb-1">BER Rating</label>
+                  <select
+                    id="ber_rating"
+                    name="ber_rating"
+                    value={tempFilters.ber_rating}
+                    onChange={handleChange("ber_rating")}
+                    className="w-full p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">Select Rating</option>
+                    <option value="A1">A1</option>
+                    <option value="A2">A2</option>
+                    <option value="A3">A3</option>
+                    <option value="B1">B1</option>
+                    <option value="B2">B2</option>
+                    <option value="B3">B3</option>
+                    <option value="C1">C1</option>
+                    <option value="C2">C2</option>
+                    <option value="C3">C3</option>
+                    <option value="D1">D1</option>
+                    <option value="D2">D2</option>
+                    <option value="E1">E1</option>
+                    <option value="E2">E2</option>
+                    <option value="F">F</option>
+                    <option value="G">G</option>
+                  </select>
                 </div>
               </div>
-            )}
+              <div className="flex justify-center mt-6">
+                <button
+                  type="submit"
+                  className="px-8 py-3 bg-gradient-to-r from-gray-200 to-gray-300 text-gray-700 rounded-md font-semibold text-lg shadow-md hover:shadow-lg hover:from-gray-300 hover:to-gray-400 transition duration-300 ring-2 ring-gray-200 ring-opacity-50"
+                >
+                  Recalculate
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Price Estimate */}
