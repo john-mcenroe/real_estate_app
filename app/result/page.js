@@ -64,14 +64,27 @@ function ResultComponent() {
   // Handle filter form submission
   const handleRecalculate = (e) => {
     e.preventDefault();
+    
+    let newAddress = tempAddress;
+    let newLat = filters.lat;
+    let newLng = filters.lng;
+
+    if (selectedPlace && selectedPlace.geometry) {
+      newAddress = selectedPlace.formatted_address;
+      newLat = selectedPlace.geometry.location.lat();
+      newLng = selectedPlace.geometry.location.lng();
+    }
+
     const newFilters = {
       ...tempFilters,
-      address: tempAddress, // Use the tempAddress here
+      address: newAddress,
+      lat: newLat,
+      lng: newLng,
     };
+
     setFilters(newFilters);
     updateURL(newFilters);
     setIsEditing(false);
-    // Reset states before fetching new data
     setState({
       properties: [],
       loading: true,
@@ -81,7 +94,6 @@ function ResultComponent() {
     });
     setGeneratedColumns(null);
     setXgboostPrediction(null);
-    // Trigger a new fetch
     fetchProperties();
   };
 
@@ -226,7 +238,7 @@ function ResultComponent() {
       const roundedPrediction = Math.round(predictionResult.prediction / 10) * 10;
       setXgboostPrediction(roundedPrediction);
 
-      const lowerBound = roundedPrediction * 0.8; // 20% lower
+      const lowerBound = roundedPrediction * 0.9; // 10% lower
       const upperBound = roundedPrediction * 1.2; // 20% higher
 
       // Calculate similarity scores and filter properties
@@ -291,10 +303,10 @@ function ResultComponent() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [tempAddress, setTempAddress] = useState(filters.address);
+  const [selectedPlace, setSelectedPlace] = useState(null);
   const inputRef = useRef(null);
   const autocompleteRef = useRef(null);
 
-  // Function to initialize Google Places Autocomplete
   const initializeAutocomplete = () => {
     if (window.google && inputRef.current) {
       const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
@@ -306,13 +318,8 @@ function ResultComponent() {
       autocomplete.addListener('place_changed', () => {
         const place = autocomplete.getPlace();
         if (place.geometry) {
+          setSelectedPlace(place);
           setTempAddress(place.formatted_address);
-          setTempFilters(prev => ({
-            ...prev,
-            address: place.formatted_address,
-            lat: place.geometry.location.lat(),
-            lng: place.geometry.location.lng(),
-          }));
         }
       });
 
@@ -320,7 +327,6 @@ function ResultComponent() {
     }
   };
 
-  // Use effect to initialize autocomplete when editing starts
   useEffect(() => {
     if (isEditing) {
       initializeAutocomplete();
@@ -329,6 +335,7 @@ function ResultComponent() {
 
   const handleEditClick = () => {
     setIsEditing(true);
+    setSelectedPlace(null);
     setTimeout(() => {
       inputRef.current?.focus();
     }, 0);
@@ -336,6 +343,7 @@ function ResultComponent() {
 
   const handleAddressChange = (e) => {
     setTempAddress(e.target.value);
+    setSelectedPlace(null);
   };
 
   if (state.loading) {
@@ -376,6 +384,12 @@ function ResultComponent() {
                     onChange={handleAddressChange}
                     className="flex-grow p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter address"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleRecalculate(e);
+                      }
+                    }}
                   />
                 ) : (
                   <>
