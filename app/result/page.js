@@ -306,17 +306,14 @@ function ResultComponent() {
           {/* House Details */}
           <div className="bg-gradient-to-b from-blue-50 to-blue-100 p-6 rounded-lg shadow-md border border-blue-200">
             <h2 className="text-2xl font-bold mb-4 text-gray-800">House Details</h2>
-            {filters.address ? (
+            {filters.address && (
               <div>
                 <p className="text-gray-700 mb-4">
                   <strong>Address:</strong> {filters.address}
                 </p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  {/* Beds Input */}
-                  <div className="flex flex-col">
-                    <label htmlFor="beds" className="block text-xs font-medium text-gray-600">
-                      Beds
-                    </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-6">
+                  <div>
+                    <label htmlFor="beds" className="block text-xs font-medium text-gray-600 mb-1">Beds</label>
                     <input
                       type="number"
                       id="beds"
@@ -326,14 +323,11 @@ function ResultComponent() {
                       step={1}
                       value={tempFilters.beds}
                       onChange={handleChange("beds")}
-                      className="mt-1 w-20 p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
-                  {/* Baths Input */}
-                  <div className="flex flex-col">
-                    <label htmlFor="baths" className="block text-xs font-medium text-gray-600">
-                      Baths
-                    </label>
+                  <div>
+                    <label htmlFor="baths" className="block text-xs font-medium text-gray-600 mb-1">Baths</label>
                     <input
                       type="number"
                       id="baths"
@@ -343,14 +337,11 @@ function ResultComponent() {
                       step={1}
                       value={tempFilters.baths}
                       onChange={handleChange("baths")}
-                      className="mt-1 w-20 p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
-                  {/* Size Input */}
-                  <div className="flex flex-col">
-                    <label htmlFor="size" className="block text-xs font-medium text-gray-600">
-                      Size (m²)
-                    </label>
+                  <div>
+                    <label htmlFor="size" className="block text-xs font-medium text-gray-600 mb-1">Size (m²)</label>
                     <input
                       type="number"
                       id="size"
@@ -360,20 +351,17 @@ function ResultComponent() {
                       step={10}
                       value={tempFilters.size}
                       onChange={handleChange("size")}
-                      className="mt-1 w-24 p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
-                  {/* Property Type Input */}
-                  <div className="flex flex-col">
-                    <label htmlFor="property_type" className="block text-xs font-medium text-gray-600">
-                      Property Type
-                    </label>
+                  <div>
+                    <label htmlFor="property_type" className="block text-xs font-medium text-gray-600 mb-1">Property Type</label>
                     <select
                       id="property_type"
                       name="property_type"
                       value={tempFilters.property_type}
                       onChange={handleChange("property_type")}
-                      className="mt-1 w-32 p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
                     >
                       <option value="">Select Type</option>
                       <option value="house">House</option>
@@ -383,17 +371,14 @@ function ResultComponent() {
                       <option value="villa">Villa</option>
                     </select>
                   </div>
-                  {/* BER Rating Dropdown */}
-                  <div className="flex flex-col">
-                    <label htmlFor="ber_rating" className="block text-xs font-medium text-gray-600">
-                      BER Rating
-                    </label>
+                  <div>
+                    <label htmlFor="ber_rating" className="block text-xs font-medium text-gray-600 mb-1">BER Rating</label>
                     <select
                       id="ber_rating"
                       name="ber_rating"
                       value={tempFilters.ber_rating}
                       onChange={handleChange("ber_rating")}
-                      className="mt-1 w-20 p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
                     >
                       <option value="">Select Rating</option>
                       <option value="A1">A1</option>
@@ -413,38 +398,48 @@ function ResultComponent() {
                       <option value="G">G</option>
                     </select>
                   </div>
-                  {/* Recalculate Button */}
-                  <div className="mt-6">
-                    <button
-                      type="submit"
-                      className="px-6 py-3 bg-gradient-to-r from-blue-400 to-blue-600 text-white rounded-md hover:from-blue-500 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 transition duration-300 ease-in-out shadow-md hover:shadow-lg"
-                      disabled={state.loading}
-                    >
-                      Recalculate
-                    </button>
-                  </div>
+                </div>
+                <div className="flex justify-center mt-6">
+                  <button
+                    type="submit"
+                    className="px-8 py-3 bg-gradient-to-r from-gray-200 to-gray-300 text-gray-700 rounded-md font-semibold text-lg shadow-md hover:shadow-lg hover:from-gray-300 hover:to-gray-400 transition duration-300 ring-2 ring-gray-200 ring-opacity-50"
+                  >
+                    Recalculate
+                  </button>
                 </div>
               </div>
-            ) : (
-              <p className="text-gray-700">No location data available.</p>
             )}
           </div>
 
           {/* Price Estimate */}
           <div className="bg-gradient-to-b from-blue-50 to-blue-100 p-6 rounded-lg shadow-md border border-blue-200">
             <h2 className="text-2xl font-bold mb-4 text-gray-800">Price Estimate</h2>
-            {xgboostPrediction !== null && !isNaN(xgboostPrediction) ? (
-              <>
-                <p className="text-5xl font-extrabold text-green-500 mb-2 shadow-sm">
-                  {formatCurrency(Math.round(xgboostPrediction / 10000) * 10000)}
-                </p>
-                <p className="text-xl text-gray-700">
-                  Range: {formatCurrency(Math.round((xgboostPrediction * 0.9) / 10000) * 10000)} - {formatCurrency(Math.round((xgboostPrediction * 1.2) / 10000) * 10000)}
-                </p>
-              </>
-            ) : (
-              <p className="text-gray-700">No valuation data available.</p>
-            )}
+            <div className="flex flex-col md:flex-row justify-between items-center">
+              <div className="w-full md:w-1/2 text-center md:text-left">
+                {xgboostPrediction !== null && !isNaN(xgboostPrediction) ? (
+                  <>
+                    <p className="text-5xl font-extrabold text-green-500 mb-2">
+                      {formatCurrency(Math.round(xgboostPrediction / 10000) * 10000)}
+                    </p>
+                    <p className="text-xl text-gray-700">
+                      Range: {formatCurrency(Math.round((xgboostPrediction * 0.9) / 10000) * 10000)} - {formatCurrency(Math.round((xgboostPrediction * 1.2) / 10000) * 10000)}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-gray-700">No valuation data available.</p>
+                )}
+              </div>
+              <div className="w-full md:w-1/2 mt-6 md:mt-0 flex flex-col items-center md:items-center">
+                <div className="w-64 flex flex-col items-start md:mr-12">
+                  <button className="w-full py-4 bg-blue-500 text-white rounded-full font-bold text-xl shadow-md hover:bg-blue-600 transition duration-300">
+                    Get Cash Offer Now
+                  </button>
+                  <p className="mt-3 text-sm text-gray-600 max-w-xs">
+                    Complete the first steps of selling your home with no upfront obligation.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </form>
