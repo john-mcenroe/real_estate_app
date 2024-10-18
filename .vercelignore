@@ -1,0 +1,11 @@
+# Ignore Python API folder
+python-api/
+
+# Ignore any Python-related files in the root
+*.py
+requirements.txt
+
+# Ignore any other backend-related folders or files
+backend/
+models/
+
