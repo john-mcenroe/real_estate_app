@@ -366,7 +366,6 @@ def python_api(request):
         
         if request_json and 'data' in request_json:
             result = generate_columns(request_json['data'])
-            logging.debug(f"Generated result: {result}")
             return jsonify(result), 200
         else:
             return jsonify({"error": "Invalid input"}), 400

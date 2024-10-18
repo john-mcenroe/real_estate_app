@@ -1,9 +1,16 @@
 import { NextResponse } from "next/server";
 
 const API_URL = process.env.GOOGLE_CLOUD_API_URL;
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 
 export async function POST(req) {
   try {
+    console.log('Environment variables:', {
+      API_URL,
+      SUPABASE_URL,
+      NODE_ENV: process.env.NODE_ENV,
+    });
+
     const data = await req.json();
     console.log('Received data in /predict API route:', data);
     console.log('Sending data to Google Cloud Function:', JSON.stringify(data));

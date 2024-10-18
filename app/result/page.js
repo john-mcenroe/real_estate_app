@@ -2,13 +2,25 @@
 
 import { Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { supabase } from "../../libs/supabaseClient";
+import { createClient } from '@supabase/supabase-js'
+
+console.log('Node environment:', process.env.NODE_ENV);
+console.log('Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
+console.log('All environment variables:', process.env);
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+if (!supabaseUrl) {
+  throw new Error(`NEXT_PUBLIC_SUPABASE_URL is not set. 
+    Node env: ${process.env.NODE_ENV}, 
+    Available vars: ${Object.keys(process.env).join(', ')}`)
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey)
+
 import {
-  haversineDistance,
-  calculateMedian,
-  calculateConfidenceBands,
-  getPropertyCategory,
-  calculateSimilarity,
+  haversineDistance
 } from "../utils";
 import Modal from "../../components/Modal";
 import { FaEdit } from 'react-icons/fa'; // Import the edit icon
@@ -599,7 +611,7 @@ export default function ResultPage() {
     <Suspense fallback={<div>Loading...</div>}>
       <ResultComponent />
     </Suspense>
-  );
+  ); 
 }
 
 // Add this function at the end of your component or in a separate utils file
