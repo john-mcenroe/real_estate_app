@@ -9,3 +9,4 @@ joblib==1.2.0
 xgboost==2.1.1
 scikit-learn==1.5.2
 gunicorn==20.1.0
+Cython==0.29.33
