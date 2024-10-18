@@ -509,7 +509,7 @@ function ResultComponent() {
           <div className="bg-gradient-to-b from-blue-50 to-blue-100 p-6 rounded-lg shadow-md border border-blue-200">
             <h2 className="text-2xl font-bold mb-4 text-gray-800 text-center md:text-left">Price Estimate</h2>
             <div className="flex flex-col md:flex-row justify-between items-center">
-              <div className="w-full md:w-1/2 text-center">
+              <div className="w-full md:w-1/2 text-center md:text-left">
                 {xgboostPrediction !== null && !isNaN(xgboostPrediction) ? (
                   <>
                     <p className="text-5xl font-extrabold text-green-500 mb-2">
