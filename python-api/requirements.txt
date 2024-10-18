@@ -1,11 +1,11 @@
-Flask==2.3.2
+Flask==2.0.1
 Werkzeug==2.0.1
 supabase==1.0.3
-python-dotenv==1.0.1
+python-dotenv==0.19.0
 pandas==2.2.2
 numpy==1.26.4
 functions-framework==3.0.0
-joblib==1.4.2
+joblib==1.2.0
 xgboost==2.1.1 --prefer-binary
 scikit-learn==1.5.2 --prefer-binary
 gunicorn==20.1.0
