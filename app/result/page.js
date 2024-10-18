@@ -358,6 +358,14 @@ function ResultComponent() {
     setSelectedPlace(null);
   };
 
+  // Add this function inside the ResultComponent
+  const handlePropertyClick = (e, link) => {
+    if (window.innerWidth < 768) { // Mobile breakpoint
+      e.preventDefault();
+      window.location.href = link;
+    }
+  };
+
   if (state.loading) {
     return <div className="text-center">Loading properties...</div>;
   }
@@ -509,7 +517,7 @@ function ResultComponent() {
               <div className="flex justify-center mt-6">
                 <button
                   type="submit"
-                  className="px-8 py-3 bg-gradient-to-r from-gray-200 to-gray-300 text-gray-700 rounded-md font-semibold text-lg shadow-md hover:shadow-lg hover:from-gray-300 hover:to-gray-400 transition duration-300 ring-2 ring-gray-200 ring-opacity-50"
+                  className="px-8 py-3 bg-blue-50 text-blue-600 border border-blue-200 rounded-md font-semibold text-lg shadow-sm hover:bg-blue-100 hover:border-blue-300 transition duration-300"
                 >
                   Recalculate
                 </button>
@@ -559,8 +567,9 @@ function ResultComponent() {
               <div key={index} className="group h-full">
                 <a
                   href={property.myhome_link || '#'}
-                  target={property.myhome_link ? "_blank" : ""}
-                  rel={property.myhome_link ? "noopener noreferrer" : ""}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => handlePropertyClick(e, property.myhome_link)}
                   className={`block bg-white p-6 rounded-lg shadow-md hover:shadow-xl transition duration-300 ease-in-out h-full flex flex-col ${
                     property.myhome_link ? 'cursor-pointer' : 'cursor-default'
                   }`}
