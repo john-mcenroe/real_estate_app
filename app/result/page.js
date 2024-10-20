@@ -546,10 +546,10 @@ function ResultComponent() {
               <div className="w-full md:w-1/2 mt-6 md:mt-0 flex flex-col items-center md:items-center">
                 <div className="w-64 flex flex-col items-start md:mr-12">
                   <button className="w-full py-4 bg-blue-500 text-white rounded-full font-bold text-xl shadow-md hover:bg-blue-600 transition duration-300">
-                    Get Cash Offer Now
+                    Get Instant Cash Offers
                   </button>
                   <p className="mt-3 text-sm text-gray-600 max-w-xs">
-                    Complete the first steps of selling your home with no upfront obligation.
+                    No obligation to get started. Take the first step to selling your house.
                   </p>
                 </div>
               </div>
