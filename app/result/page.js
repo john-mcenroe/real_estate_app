@@ -165,8 +165,6 @@ function ResultComponent() {
           p.longitude &&
           !isNaN(parseFloat(p.latitude)) &&
           !isNaN(parseFloat(p.longitude)) &&
-          p.myhome_floor_area_value != null &&
-          !isNaN(parseFloat(p.myhome_floor_area_value)) &&
           p.beds != null &&
           !isNaN(parseInt(p.beds, 10)) &&
           p.baths != null &&
@@ -258,6 +256,9 @@ function ResultComponent() {
         .map((property) => ({
           ...property,
           distance: haversineDistance(lat, lng, property.latitude, property.longitude),
+          myhome_floor_area_value: property.myhome_floor_area_value != null ? 
+            parseFloat(property.myhome_floor_area_value) : 
+            null
         }))
         .filter((p) => 
           p.distance <= 10 && // Limit to properties within 10 km
