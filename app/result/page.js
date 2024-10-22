@@ -134,7 +134,7 @@ function ResultComponent() {
 
       // Fetch properties from Supabase
       const { data: properties, error } = await supabase
-        .from("scraped_property_data_v1")
+        .from("scraped_property_data_v2") // Updated table name
         .select(`
           id,
           latitude,
@@ -150,7 +150,7 @@ function ResultComponent() {
           energy_rating,
           address
         `)
-        .order("sale_date", { ascending: false });
+        // .order("sale_date", { ascending: false }); // Remove this line
 
       if (error) {
         console.error("Supabase Error:", error);
@@ -265,7 +265,7 @@ function ResultComponent() {
           p.sale_price >= lowerBound &&
           p.sale_price <= upperBound
         )
-        .sort((a, b) => a.distance - b.distance)
+        .sort((a, b) => a.distance - b.distance) // Sort by distance
         .slice(0, 28);
 
       console.log("Properties with similarity:", propertiesWithSimilarity);
