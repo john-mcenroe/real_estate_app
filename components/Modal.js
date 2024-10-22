@@ -107,14 +107,13 @@ const Modal = ({ isModalOpen, setIsModalOpen, onSubmit, initialValues }) => {
                   <div>
                     <label htmlFor="size" className="block text-sm font-medium text-gray-700">Size (m²)</label>
                     <input
-                      type="number"
+                      type="text"
                       id="size"
                       name="size"
-                      min="10"
-                      step="10"
                       value={inputs.size}
                       onChange={handleChange}
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Enter size in m²"
                       required
                     />
                   </div>
@@ -132,9 +131,6 @@ const Modal = ({ isModalOpen, setIsModalOpen, onSubmit, initialValues }) => {
                       <option value="">Select property type</option>
                       <option value="house">House</option>
                       <option value="apartment">Apartment</option>
-                      <option value="bungalow">Bungalow</option>
-                      <option value="cottage">Cottage</option>
-                      <option value="villa">Villa</option>
                     </select>
                   </div>
                   {/* BER Rating Input */}
@@ -149,19 +145,11 @@ const Modal = ({ isModalOpen, setIsModalOpen, onSubmit, initialValues }) => {
                       required
                     >
                       <option value="">Select BER rating</option>
-                      <option value="A1">A1</option>
-                      <option value="A2">A2</option>
-                      <option value="A3">A3</option>
-                      <option value="B1">B1</option>
-                      <option value="B2">B2</option>
-                      <option value="B3">B3</option>
-                      <option value="C1">C1</option>
-                      <option value="C2">C2</option>
-                      <option value="C3">C3</option>
-                      <option value="D1">D1</option>
-                      <option value="D2">D2</option>
-                      <option value="E1">E1</option>
-                      <option value="E2">E2</option>
+                      <option value="A">A</option>
+                      <option value="B">B</option>
+                      <option value="C">C</option>
+                      <option value="D">D</option>
+                      <option value="E">E</option>
                       <option value="F">F</option>
                       <option value="G">G</option>
                     </select>

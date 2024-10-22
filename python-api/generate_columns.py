@@ -78,15 +78,15 @@ def get_bath_category(baths):
 def get_ber_category(ber_rating):
     if not ber_rating:
         return 'Unknown'
-    if ber_rating in ['A1', 'A2', 'A3']:
+    if ber_rating in ['A1', 'A2', 'A3', 'A']:
         return 'A'
-    elif ber_rating in ['B1', 'B2', 'B3']:
+    elif ber_rating in ['B1', 'B2', 'B3', 'B']:
         return 'B'
-    elif ber_rating in ['C1', 'C2', 'C3']:
+    elif ber_rating in ['C1', 'C2', 'C3', 'C']:
         return 'C'
-    elif ber_rating in ['D1', 'D2']:
+    elif ber_rating in ['D1', 'D2', 'D']:
         return 'D'
-    elif ber_rating in ['E1', 'E2']:
+    elif ber_rating in ['E1', 'E2', 'E']:
         return 'E'
     elif ber_rating == 'F':
         return 'F'
@@ -249,7 +249,7 @@ def ber_to_numeric(ber):
     Convert BER rating to a numeric value.
     A1 is the best (highest value), G is the worst (lowest value).
     """
-    ber_order = ['A1', 'A2', 'A3', 'B1', 'B2', 'B3', 'C1', 'C2', 'C3', 'D1', 'D2', 'E1', 'E2', 'F', 'G']
+    ber_order = ['A', 'A1', 'A2', 'A3', 'B', 'B1', 'B2', 'B3', 'C', 'C1', 'C2', 'C3', 'D', 'D1', 'D2', 'E', 'E1', 'E2', 'F', 'G']
     if pd.isna(ber) or ber == '--' or ber not in ber_order:
         return np.nan
     return float(len(ber_order) - ber_order.index(ber))

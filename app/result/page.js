@@ -367,6 +367,24 @@ function ResultComponent() {
     }
   };
 
+  // Update the options for property_type and ber_rating to match the Modal component
+  const propertyTypeOptions = [
+    { value: "", label: "Select property type" },
+    { value: "house", label: "House" },
+    { value: "apartment", label: "Apartment" },
+  ];
+
+  const berRatingOptions = [
+    { value: "", label: "Select BER rating" },
+    { value: "A", label: "A" },
+    { value: "B", label: "B" },
+    { value: "C", label: "C" },
+    { value: "D", label: "D" },
+    { value: "E", label: "E" },
+    { value: "F", label: "F" },
+    { value: "G", label: "G" },
+  ];
+
   if (state.loading) {
     return <div className="text-center">Loading properties...</div>;
   }
@@ -459,15 +477,13 @@ function ResultComponent() {
                 <div>
                   <label htmlFor="size" className="block text-xs font-medium text-gray-600 mb-1">Size (m²)</label>
                   <input
-                    type="number"
+                    type="text" // Change to text to remove spinner controls
                     id="size"
                     name="size"
-                    min={10}
-                    max={1000}
-                    step={10}
                     value={tempFilters.size}
                     onChange={handleChange("size")}
                     className="w-full p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter size in m²"
                   />
                 </div>
                 <div>
@@ -479,12 +495,11 @@ function ResultComponent() {
                     onChange={handleChange("property_type")}
                     className="w-full p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
                   >
-                    <option value="">Select Type</option>
-                    <option value="house">House</option>
-                    <option value="apartment">Apartment</option>
-                    <option value="bungalow">Bungalow</option>
-                    <option value="cottage">Cottage</option>
-                    <option value="villa">Villa</option>
+                    {propertyTypeOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -496,22 +511,11 @@ function ResultComponent() {
                     onChange={handleChange("ber_rating")}
                     className="w-full p-2 border border-gray-300 rounded-md bg-white text-sm text-gray-700 focus:ring-blue-500 focus:border-blue-500"
                   >
-                    <option value="">Select Rating</option>
-                    <option value="A1">A1</option>
-                    <option value="A2">A2</option>
-                    <option value="A3">A3</option>
-                    <option value="B1">B1</option>
-                    <option value="B2">B2</option>
-                    <option value="B3">B3</option>
-                    <option value="C1">C1</option>
-                    <option value="C2">C2</option>
-                    <option value="C3">C3</option>
-                    <option value="D1">D1</option>
-                    <option value="D2">D2</option>
-                    <option value="E1">E1</option>
-                    <option value="E2">E2</option>
-                    <option value="F">F</option>
-                    <option value="G">G</option>
+                    {berRatingOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -637,3 +641,4 @@ function formatCurrency(value) {
     return `€${value.toFixed(0)}`;
   }
 }
+
