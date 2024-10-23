@@ -383,14 +383,14 @@ if __name__ == "__main__":
             return self.json_data
 
     test_data = {"data": {
-        "address": "123 Test St",
-        "beds": "2",
-        "baths": "1",
-        "property_type": "apartment",
-        "energy_rating": "B2",
+        "address": "Grove Ave, Blackrock, Co. Dublin",
+        "beds": "4",
+        "baths": "4",
+        "property_type": "House",
+        "energy_rating": "B1",
         "latitude": "53.3498",
         "longitude": "-6.2603",
-        "size": "75"
+        "myhome_floor_area_value": 175
     }}
     mock_request = MockRequest(test_data)
     print(python_api(mock_request))
