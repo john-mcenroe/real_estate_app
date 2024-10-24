@@ -38,6 +38,17 @@ def filter_json_serializable(data):
     else:
         return data
 
+# Determine API environment
+api_env = os.getenv('API_ENV', 'local')
+api_url = os.getenv('API_URL', 'http://localhost:8080')  # Default to local
+
+if api_env == 'local':
+    logging.info("Using local Flask API.")
+    logging.info(f"API URL: {api_url}")
+else:
+    logging.info("Using Google Cloud API.")
+    logging.info(f"API URL: {api_url}")
+
 @functions_framework.http
 def python_api(request):
     with app.app_context():
@@ -50,7 +61,8 @@ def python_api(request):
         else:
             return jsonify({"error": "Not Found"}), 404
 
-def generate_columns_api(request):
+@app.route('/generate_columns', methods=['POST'])
+def generate_columns_api():
     try:
         data = request.get_json()
         logging.info(f"Received data: {data}")
@@ -66,7 +78,7 @@ def generate_columns_api(request):
         logging.info("JSON-safe result:")
         logging.info(json_safe_result)
         
-        return jsonify(json_safe_result)
+        return jsonify(json_safe_result), 200
 
     except Exception as e:
         logging.error(f"Error in generate_columns: {str(e)}")
@@ -103,4 +115,4 @@ def health_check(request):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=port, debug=True)
