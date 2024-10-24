@@ -1,5 +1,5 @@
 # ======================================
-# Updated Script #2: Enhanced Column Generation
+# Updated Script #2: Enhanced Derived Column Generation
 # ======================================
 
 import json
@@ -9,7 +9,6 @@ import traceback
 import math
 from dotenv import load_dotenv
 from supabase import create_client, Client
-from statistics import median, mode
 import pandas as pd
 import numpy as np
 from flask import jsonify
@@ -21,19 +20,20 @@ import re
 # ======================================
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Load environment variables
 load_dotenv()
 
 # Fetch Supabase credentials from environment variables
 SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
+
 if not SUPABASE_URL:
     logging.error("SUPABASE_URL is missing in the environment variables.")
     raise ValueError("SUPABASE_URL is missing in the environment variables.")
 if not SUPABASE_URL.startswith('https://'):
     SUPABASE_URL = 'https://' + SUPABASE_URL
-SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
 
 if not SUPABASE_ANON_KEY:
     logging.error("Supabase credentials are missing in the environment variables.")
@@ -248,29 +248,25 @@ def preprocess_property_data(prop):
                     prop[field] = pd.NaT
             else:
                 prop[field] = pd.NaT
-        
-        # **Validate 'ber_rating' Processing**
-        if 'ber_rating' in prop:
-            ber = prop['ber_rating']
-            logging.debug(f"Preprocessing property: BER Rating = '{ber}'")
-        else:
-            logging.debug("Preprocessing property: BER Rating is missing.")
-        
-        # **Additional Debugging: Log the entire preprocessed property**
-        logging.debug(f"Preprocessed property data: {prop}")
-        
+    
         return prop
     except Exception as e:
         logging.error(f"Error in preprocess_property_data for property ID {prop.get('id', 'N/A')}: {e}")
         return prop
 
 def fetch_nearby_properties(latitude, longitude, radius_km):
+    """
+    Fetch nearby properties within a specified radius from Supabase.
+    """
     try:
         logging.info(f"Fetching properties within {radius_km} KM of ({latitude}, {longitude})")
         
         # Calculate the approximate bounding box
         lat_range = radius_km / 111.32  # 1 degree of latitude is approximately 111.32 km
-        lon_range = radius_km / (111.32 * math.cos(math.radians(latitude))) if math.cos(math.radians(latitude)) != 0 else 0
+        if math.cos(math.radians(latitude)) == 0:
+            lon_range = 0
+        else:
+            lon_range = radius_km / (111.32 * math.cos(math.radians(latitude)))
         
         min_lat = latitude - lat_range
         max_lat = latitude + lat_range
@@ -324,7 +320,7 @@ def calculate_time_based_metrics(df, days, radius):
         f'{days}d_{radius}km_avg_asking_price': recent_df['asking_price'].mean(),
         f'{days}d_{radius}km_num_properties_sold': recent_df['sale_price'].notna().sum(),
         f'{days}d_{radius}km_avg_days_on_market': recent_df['days_on_market'].mean(),
-        f'{days}d_{radius}km_median_price_per_sqm': (recent_df['price_per_square_meter']).median(),
+        f'{days}d_{radius}km_median_price_per_sqm': recent_df['price_per_square_meter'].median(),
     }
     return metrics
 
@@ -346,6 +342,14 @@ def calculate_nearby_metrics(nearby_props, radius):
         # Remove properties with failed preprocessing
         df = df.dropna(subset=['sale_price', 'latitude', 'longitude'])
 
+        # Calculate days on market and price per sqm
+        df['days_on_market'] = df.apply(
+            lambda row: calculate_days_on_market(row.get('first_list_date'), row.get('sale_date')), axis=1
+        )
+        df['price_per_square_meter'] = df.apply(
+            lambda row: safe_divide(row.get('sale_price'), row.get('myhome_floor_area_value')), axis=1
+        )
+        
         # Calculate metrics for different time periods
         for days in [30, 90, 180]:
             time_metrics = calculate_time_based_metrics(df, days, radius)
@@ -355,30 +359,30 @@ def calculate_nearby_metrics(nearby_props, radius):
         df['ber_category'] = df['ber_rating'].apply(get_ber_category)
         ber_dist = df['ber_category'].value_counts(normalize=True) * 100
         for ber, percent in ber_dist.items():
-            metrics[f'{radius}km_ber_dist_{ber}'] = percent
+            metrics[f'{radius}km_ber_dist_{ber}'] = round(percent, 2)
         
-        # Apply get_property_type_category to categorize property types
+        # Property type distribution
         df['property_type_category'] = df['property_type'].apply(get_property_type_category)
-        
-        # Calculate distribution based on the categorized property types
         prop_type_dist = df['property_type_category'].value_counts(normalize=True) * 100
         for prop_type, percent in prop_type_dist.items():
-            metrics[f'{radius}km_property_type_dist_{prop_type}'] = percent
+            metrics[f'{radius}km_property_type_dist_{prop_type}'] = round(percent, 2)
         
         # Other general metrics
         metrics.update({
-            f'{radius}km_avg_property_size': df['myhome_floor_area_value'].mean(),
-            f'{radius}km_median_beds': df['beds'].median(),
-            f'{radius}km_median_baths': df['baths'].median(),
-            f'{radius}km_price_to_income_ratio': safe_divide(df['sale_price'].median(), 50000),  # Assuming median income of 50,000
-            f'{radius}km_price_growth_rate': safe_divide(
-                (df['sale_price'].mean() / df['first_list_price'].mean()) - 1, 
-                1
-            ) * 100 if df['first_list_price'].mean() else None,
+            f'{radius}km_avg_property_size': round(df['myhome_floor_area_value'].mean(), 2) if not df['myhome_floor_area_value'].empty else None,
+            f'{radius}km_median_beds': df['beds'].median() if not df['beds'].empty else None,
+            f'{radius}km_median_baths': df['baths'].median() if not df['baths'].empty else None,
+            f'{radius}km_price_to_income_ratio': round(safe_divide(df['sale_price'].median(), 50000), 2) if 'sale_price' in df and 'sale_price' in df else None,  # Assuming median income of 50,000
+            f'{radius}km_price_growth_rate': round(
+                safe_divide(
+                    (df['sale_price'].mean() / df['first_list_price'].mean()) - 1, 
+                    1
+                ) * 100, 2
+            ) if df['first_list_price'].mean() else None,
         })
         
     except Exception as e:
-        logging.error(f"Error calculating nearby metrics for radius {radius}: {str(e)}")
+        logging.error(f"Error calculating nearby metrics for radius {radius}: {e}")
     return metrics
 
 def calculate_market_trends(df):
@@ -393,7 +397,7 @@ def calculate_market_trends(df):
         older_avg = older_sales['sale_price'].mean()
         if older_avg and older_avg != 0:
             percent_change = ((recent_avg - older_avg) / older_avg) * 100
-            return percent_change
+            return round(percent_change, 2)
         else:
             return None
     except Exception as e:
@@ -408,11 +412,11 @@ def calculate_price_benchmarks(df, lower_bound, upper_bound):
         if upper_bound == 'overall':
             overall_avg = df['sale_price'].mean()
             lower_avg = df[df['sale_price'] >= lower_bound]['sale_price'].mean()
-            return safe_divide(lower_avg, overall_avg)
+            return round(safe_divide(lower_avg, overall_avg), 2) if overall_avg else None
         else:
             upper_avg = df[df['sale_price'] <= upper_bound]['sale_price'].mean()
             lower_avg = df[df['sale_price'] >= lower_bound]['sale_price'].mean()
-            return safe_divide(lower_avg, upper_avg)
+            return round(safe_divide(lower_avg, upper_avg), 2) if upper_avg else None
     except Exception as e:
         logging.error(f"Error calculating price benchmarks between {lower_bound} and {upper_bound}: {e}")
         return None
@@ -425,80 +429,72 @@ def calculate_price_trend(df, days):
         target_date = datetime.now() - timedelta(days=days)
         target_sales = df[df['sale_date'] >= target_date]
         trend = target_sales['sale_price'].mean()
-        return trend
+        return round(trend, 2) if not target_sales['sale_price'].empty else None
     except Exception as e:
         logging.error(f"Error calculating price trend over {days} days: {e}")
         return None
 
-def calculate_price_per_sqm(sale_price, floor_area):
-    """
-    Calculate price per square meter.
-    """
-    if pd.notna(sale_price) and pd.notna(floor_area) and floor_area > 0:
-        return sale_price / floor_area
-    return None
-
-def calculate_time_based_metrics_v2(df, days, radius):
-    """
-    Extended time-based metrics for compatibility with additional columns.
-    """
-    return calculate_time_based_metrics(df, days, radius)
-
 # ======================================
-# Step 3: Generate Columns Function
+# Step 3: Generate Derived Columns Function
 # ======================================
 
-def generate_columns(data):
+def generate_columns(original_inputs):
     """
-    Generate all required columns/metrics for a property.
+    Generate all required derived columns/metrics for a property based on original inputs.
     """
     try:
         logging.info("Starting generate_columns function.")
         
         # Preprocess the property data
-        preprocessed_data = preprocess_property_data(data)
+        preprocessed_data = preprocess_property_data(original_inputs)
         
-        result = {
+        # Derived features
+        derived_features = {
             'bedCategory': get_bed_category(preprocessed_data.get('beds', '0')),
             'bathCategory': get_bath_category(preprocessed_data.get('baths', '0')),
             'propertyTypeCategory': get_property_type_category(preprocessed_data.get('property_type', '')),
             'berCategory': get_ber_category(preprocessed_data.get('ber_rating', '')),
-            'sizeCategory': get_size_category(preprocessed_data.get('size', 0)),  # Updated to use 'size'
-            'originalInputs': {k: v for k, v in preprocessed_data.items() if k.lower() not in [
-                'asking_price', 'eircode', 'local_property_tax', 'url',
-                'myhome_link', 'price_per_square_meter',
-                'sale_price', 'sale_date', 'first_list_price', 'first_list_date'
-            ]},
-            'latitude': preprocessed_data.get('latitude'),
-            'longitude': preprocessed_data.get('longitude'),
-            'size': preprocessed_data.get('size'),  # Updated to use 'size'
-            'energy_rating_numeric': ber_to_numeric(preprocessed_data.get('ber_rating', ''))
+            'sizeCategory': get_size_category(preprocessed_data.get('size', 0)),
         }
         
-        # Fetch all nearby properties once
-        if result['latitude'] is not None and result['longitude'] is not None:
-            combined_nearby_props = []
-            radii = [1, 3, 5]
-            for radius in radii:
-                nearby_props = fetch_nearby_properties(result['latitude'], result['longitude'], radius_km=radius)
-                result[f'nearby_properties_count_within_{radius}km'] = len(nearby_props)
-                if nearby_props:
-                    nearby_metrics = calculate_nearby_metrics(nearby_props, radius)
-                    result.update(nearby_metrics)
-                    combined_nearby_props.extend(nearby_props)
-                else:
-                    logging.warning(f"No nearby properties found within {radius}km to calculate metrics.")
-        else:
-            logging.warning("Latitude or longitude is missing, skipping nearby properties calculation.")
-            combined_nearby_props = []
- 
+        # Initialize result with derived features
+        result = derived_features.copy()
+        
+        # Add latitude and longitude
+        result['latitude'] = preprocessed_data.get('latitude')
+        result['longitude'] = preprocessed_data.get('longitude')
+        
+        # Initialize energy_rating_numeric if needed
+        result['energy_rating_numeric'] = ber_to_numeric(preprocessed_data.get('ber_rating', ''))
+        
+        # Fetch and calculate metrics for each radius
+        radii = [1, 3, 5]
+        combined_nearby_props = []
+        for radius in radii:
+            nearby_props = fetch_nearby_properties(result['latitude'], result['longitude'], radius_km=radius)
+            result[f'nearby_properties_count_within_{radius}km'] = len(nearby_props)
+            if nearby_props:
+                nearby_metrics = calculate_nearby_metrics(nearby_props, radius)
+                result.update(nearby_metrics)
+                combined_nearby_props.extend(nearby_props)
+            else:
+                logging.warning(f"No nearby properties found within {radius}km to calculate metrics.")
+        
         # Calculate market trends and benchmarks if combined_nearby_props is not empty
         if combined_nearby_props:
             df_nearby = pd.DataFrame(combined_nearby_props)
             # Preprocess the DataFrame
             df_nearby = df_nearby.apply(preprocess_property_data, axis=1)
             df_nearby = df_nearby.dropna(subset=['sale_price', 'latitude', 'longitude'])
- 
+            
+            # Calculate days on market and price per sqm
+            df_nearby['days_on_market'] = df_nearby.apply(
+                lambda row: calculate_days_on_market(row.get('first_list_date'), row.get('sale_date')), axis=1
+            )
+            df_nearby['price_per_square_meter'] = df_nearby.apply(
+                lambda row: safe_divide(row.get('sale_price'), row.get('myhome_floor_area_value')), axis=1
+            )
+            
             # Calculate market trends
             market_trend = calculate_market_trends(df_nearby)
             result['market_trend_30_days'] = market_trend
@@ -514,9 +510,9 @@ def generate_columns(data):
                 result[f'price_trend_{days}_days'] = trend
         else:
             logging.warning("No combined nearby properties found for market trends and benchmarks.")
- 
+        
         # Replace NaN with None
-        result = {k: (None if isinstance(v, float) and np.isnan(v) else v) for k, v in result.items()}
+        result = replace_nan(result)
         
         logging.info("Finished generate_columns function.")
         return result
@@ -529,16 +525,20 @@ def generate_columns(data):
 # ======================================
 
 def python_api(request):
+    """
+    API endpoint to process input data and generate derived columns.
+    """
     try:
-        logging.debug("Function started")
+        logging.info("API request received.")
         request_json = request.get_json(silent=True)
         logging.debug(f"Received request: {request_json}")
         
-        if request_json and 'data' in request_json:
-            result = generate_columns(request_json['data'])
+        if request_json and 'originalInputs' in request_json:
+            result = generate_columns(request_json['originalInputs'])
             return jsonify(result), 200
         else:
-            return jsonify({"error": "Invalid input"}), 400
+            logging.error("Invalid input: 'originalInputs' key missing.")
+            return jsonify({"error": "Invalid input. 'originalInputs' key is missing."}), 400
     except Exception as e:
         logging.error(f"Error in python_api: {e}")
         logging.error(traceback.format_exc())
@@ -556,26 +556,18 @@ if __name__ == "__main__":
         def get_json(self, silent=False):
             return self.json_data
     
-    test_data = {"data": {
-        "address": "Grove Ave, Blackrock, Co. Dublin",
-        "beds": "4",
-        "baths": "4",
-        "property_type": "House",
-        "energy_rating": "B1",
-        "latitude": "53.3498",
-        "longitude": "-6.2603",
-        "myhome_floor_area_value": 175
+    # Example input based on the user's provided originalInputs
+    test_data = {"originalInputs": {
+        "baths": 4,
+        "beds": 4,
+        "ber_rating": "B",
+        "latitude": 53.29063559999999,
+        "longitude": -6.2057497,
+        "property_type": "house",
+        "size": "170"
     }}
     mock_request = MockRequest(test_data)
     response, status = python_api(mock_request)
     print(f"Status Code: {status}")
     print("Response JSON:")
     print(json.dumps(response.json, indent=4))
-
-
-
-
-
-
-
-
