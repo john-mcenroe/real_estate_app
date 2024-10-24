@@ -85,32 +85,28 @@ def generate_columns_api():
         logging.error(traceback.format_exc())
         return jsonify({"error": str(e)}), 500
 
-def predict_api(request):
+@app.route('/predict', methods=['POST'])
+def predict_api():
+    """
+    API Endpoint to make predictions based on processed data.
+    """
     try:
         data = request.get_json()
-        if not data:
-            return jsonify({"error": "No input data provided"}), 400
+        logging.info(f"Received data for predict: {data}")
         result = predict(data)
-        
-        # Print raw output
-        logging.info("Raw output from predict:")
-        logging.info(result)
-        
-        # Try to serialize to JSON
-        try:
-            json_result = json.dumps(result, cls=NumpyEncoder)
-            logging.info("JSON serialization successful")
-        except Exception as json_error:
-            logging.error(f"JSON serialization failed: {str(json_error)}")
-            return jsonify({"error": "Failed to serialize result"}), 500
-        
-        return Response(json_result, mimetype='application/json')
+        logging.debug(f"Prediction result: {result}")
+        return jsonify(result), 200
     except Exception as e:
-        logging.error(f"Error in predict: {str(e)}")
+        logging.error(f"Error in predict_api: {e}")
         logging.error(traceback.format_exc())
         return jsonify({"error": str(e)}), 500
 
-def health_check(request):
+
+@app.route('/', methods=['GET'])
+def health_check():
+    """
+    Health check endpoint to verify the server is running.
+    """
     return jsonify({"status": "healthy"}), 200
 
 if __name__ == "__main__":
